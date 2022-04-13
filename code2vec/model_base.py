@@ -6,53 +6,21 @@ from typing import NamedTuple, Optional, List, Dict, Tuple, Iterable
 from common import common
 from vocabularies import Code2VecVocabs, VocabType
 from config import Config
-from pathlib import Path
 
 
 class ModelEvaluationResults(NamedTuple):
-    # topk_acc: float
+    topk_acc: float
     subtoken_precision: float
     subtoken_recall: float
     subtoken_f1: float
-    subtoken_accuracy: float
-    subtoken_error_rate: float
-    subtoken_true_positives: int
-    subtoken_true_negatives: int
-    subtoken_false_positives: int
-    subtoken_false_negatives: int
-    subtoken_tnr: float
-    subtoken_fpr: float
     loss: Optional[float] = None
 
-            #     subtoken_precision=subtokens_evaluation_metric.precision,
-            # subtoken_recall=subtokens_evaluation_metric.recall,
-            # subtoken_f1=subtokens_evaluation_metric.f1,
-            # subtoken_accuracy=subtokens_evaluation_metric.accuracy,
-            # subtoken_error_rate=subtokens_evaluation_metric.error_rate,
-            # subtoken_true_positives=subtokens_evaluation_metric.nr_true_positives,
-            # subtoken_true_negatives=subtokens_evaluation_metric.nr_true_negatives,
-            # subtoken_false_positives=subtokens_evaluation_metric.nr_false_positives,
-            # subtoken_false_negatives=subtokens_evaluation_metric.nr_false_negatives,
-            # subtoken_tnr=subtokens_evaluation_metric.true_negatives_rate,
-            # subtoken_fpr=subtokens_evaluation_metric.false_positives_rate
-
-
     def __str__(self):
-        # res_str = 'topk_acc: {topk_acc}, precision: {precision}, recall: {recall}, accuracy: {accuracy}, F1: {f1}, #TPs={tps}, #FNs={fns}'.format(
-        res_str = 'Precision: {precision}, Sensitivity/Recall: {recall}, Accuracy: {accuracy}, Error Rate: {error_rate}, F1: {f1}, #TPs={tps}, #TNs={tns}, #FPs={fps}, #FNs={fns}, TNR={tnr}, FPR={fpr}'.format(
-            # topk_acc=self.topk_acc,
+        res_str = 'topk_acc: {topk_acc}, precision: {precision}, recall: {recall}, F1: {f1}'.format(
+            topk_acc=self.topk_acc,
             precision=self.subtoken_precision,
             recall=self.subtoken_recall,
-            f1=self.subtoken_f1,
-            accuracy=self.subtoken_accuracy,
-            error_rate=self.subtoken_error_rate,
-            tps=self.subtoken_true_positives,
-            tns=self.subtoken_true_negatives,
-            fps=self.subtoken_false_positives,
-            fns=self.subtoken_false_negatives,
-            tnr=self.subtoken_tnr,
-            fpr=self.subtoken_fpr
-            )
+            f1=self.subtoken_f1)
         if self.loss is not None:
             res_str = ('loss: {}, '.format(self.loss)) + res_str
         return res_str
@@ -82,8 +50,12 @@ class Code2VecModelBase(abc.ABC):
         self._initialize()
 
     def _log_creating_model(self):
+        self.log('')
+        self.log('')
+        self.log('---------------------------------------------------------------------')
         self.log('---------------------------------------------------------------------')
         self.log('---------------------- Creating code2vec model ----------------------')
+        self.log('---------------------------------------------------------------------')
         self.log('---------------------------------------------------------------------')
 
     def _log_model_configuration(self):
@@ -108,7 +80,6 @@ class Code2VecModelBase(abc.ABC):
             self.config.NUM_TRAIN_EXAMPLES = self._get_num_of_examples_for_dataset(self.config.train_data_path)
             self.log('    Number of train examples: {}'.format(self.config.NUM_TRAIN_EXAMPLES))
         if self.config.is_testing:
-            self.log(f"Path: {self.config.TEST_DATA_PATH}")
             self.config.NUM_TEST_EXAMPLES = self._get_num_of_examples_for_dataset(self.config.TEST_DATA_PATH)
             self.log('    Number of test examples: {}'.format(self.config.NUM_TEST_EXAMPLES))
 
@@ -129,16 +100,9 @@ class Code2VecModelBase(abc.ABC):
         self._load_or_create_inner_model()
 
     def save(self, model_save_path=None):
-        # TODO: path handling is not OS-agnostic
-
         if model_save_path is None:
             model_save_path = self.config.MODEL_SAVE_PATH
-
-
-        # model_save_dir = '/'.join(model_save_path.split('/')[:-1])
-        model_save_dir = Path(model_save_path).parent
-
-
+        model_save_dir = '/'.join(model_save_path.split('/')[:-1])
         if not os.path.isdir(model_save_dir):
             os.makedirs(model_save_dir, exist_ok=True)
         self.vocabs.save(self.config.get_vocabularies_path_from_model_path(model_save_path))

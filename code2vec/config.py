@@ -58,8 +58,8 @@ class Config:
         self.MAX_TO_KEEP = 10
 
         # labels
-        self.POSITIVE = 'vuln'
-        self.NEGATIVE = 'safe'
+        #self.POSITIVE = 'vuln'
+        #self.NEGATIVE = 'safe'
 
         # model hyper-params
         self.MAX_CONTEXTS = 200
@@ -105,8 +105,8 @@ class Config:
         self.MAX_TO_KEEP: int = 0
 
         # labels
-        self.POSITIVE = ''
-        self.NEGATIVE = ''
+        #self.POSITIVE = ''
+        #self.NEGATIVE = ''
 
         # model hyper-params
         self.MAX_CONTEXTS: int = 0

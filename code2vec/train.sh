@@ -17,4 +17,4 @@ test_data=${data_dir}/${dataset_name}.val.c2v
 model_dir=models/${type}
 
 mkdir -p ${model_dir}
-python -u code2vec.py --data ${data} --test ${test_data} --save ${model_dir}/saved_model
+python3 -u code2vec.py --data ${data} --test ${test_data} --save ${model_dir}/saved_model

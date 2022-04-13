@@ -2,6 +2,15 @@
 [![CircleCI](https://circleci.com/gh/JetBrains-Research/astminer.svg?style=svg)](https://circleci.com/gh/JetBrains-Research/astminer)
 [ ![Download](https://api.bintray.com/packages/egor-bogomolov/astminer/astminer/images/download.svg) ](https://bintray.com/egor-bogomolov/astminer/astminer/_latestVersion)
 
+# tomer comments
+* make a folder that will contain `train` `test` and `val` folders
+* change `preperdata.sh` to work with right folders
+* run  `preperdata.sh`
+* coppy files to C2V foldet for training
+
+To change the lable, change the `cli/LableExtractors.ks` to have a class that extruct the desired lable, and add it to `cli/utils.kt` in `getLabelExtractor`. By default it takes the file path  
+
+
 # astminer
 A library for mining of [path-based representations of code](https://arxiv.org/pdf/1803.09544.pdf) and more, supported by the [Machine Learning Methods for Software Engineering](https://research.jetbrains.org/groups/ml_methods) group at [JetBrains Research](https://research.jetbrains.org).
 

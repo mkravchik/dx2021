@@ -78,6 +78,7 @@ class Code2VecModel(Code2VecModelBase):
 
                 # Actual training for the current batch.
                 _, batch_loss = self.sess.run([optimizer, train_loss])
+
                 sum_loss += batch_loss
                 if batch_num % self.config.NUM_BATCHES_TO_LOG_PROGRESS == 0:
                     self._trace_training(sum_loss, batch_num, multi_batch_start_time)
@@ -91,7 +92,6 @@ class Code2VecModel(Code2VecModelBase):
                     model_save_path = self.config.MODEL_SAVE_PATH + '_iter' + str(epoch_num)
                     self.save(model_save_path)
                     self.log('Saved after %d epochs in: %s' % (epoch_num, model_save_path))
-                    #-----TODO: Change this.. for the new task!
                     evaluation_results = self.evaluate()
                     evaluation_results_str = (str(evaluation_results).replace('topk', 'top{}'.format(
                         self.config.TOP_K_WORDS_CONSIDERED_DURING_PREDICTION)))
@@ -99,7 +99,6 @@ class Code2VecModel(Code2VecModelBase):
                         nr_epochs=epoch_num,
                         evaluation_results=evaluation_results_str
                     ))
-                    #------END
         except tf.errors.OutOfRangeError:
             pass  # The reader iterator is exhausted and have no more batches to produce.
 
@@ -143,10 +142,9 @@ class Code2VecModel(Code2VecModelBase):
             total_prediction_batches = 0
             subtokens_evaluation_metric = SubtokensEvaluationMetric(
                 partial(common.filter_impossible_names, self.vocabs.target_vocab.special_words))
-            # topk_accuracy_evaluation_metric = TopKAccuracyEvaluationMetric(
-            #     self.config.TOP_K_WORDS_CONSIDERED_DURING_PREDICTION,
-            #     partial(common.get_first_match_word_from_top_predictions, self.vocabs.target_vocab.special_words))
-            # print(topk_accuracy_evaluation_metric.top_k)
+            topk_accuracy_evaluation_metric = TopKAccuracyEvaluationMetric(
+                self.config.TOP_K_WORDS_CONSIDERED_DURING_PREDICTION,
+                partial(common.get_first_match_word_from_top_predictions, self.vocabs.target_vocab.special_words))
             start_time = time.time()
 
             self.sess.run(self.eval_input_iterator_reset_op)
@@ -170,7 +168,7 @@ class Code2VecModel(Code2VecModelBase):
                     original_names = common.binary_to_string_list(original_names)  # (batch,)
 
                     self._log_predictions_during_evaluation(zip(original_names, top_words), log_output_file)
-                    # topk_accuracy_evaluation_metric.update_batch(zip(original_names, top_words))
+                    topk_accuracy_evaluation_metric.update_batch(zip(original_names, top_words))
                     subtokens_evaluation_metric.update_batch(zip(original_names, top_words))
 
                     total_predictions += len(original_names)
@@ -184,26 +182,17 @@ class Code2VecModel(Code2VecModelBase):
             except tf.errors.OutOfRangeError:
                 pass  # reader iterator is exhausted and have no more batches to produce.
             self.log('Done evaluating, epoch reached')
-            # log_output_file.write(str(topk_accuracy_evaluation_metric.topk_correct_predictions) + '\n')
+            log_output_file.write(str(topk_accuracy_evaluation_metric.topk_correct_predictions) + '\n')
         if self.config.EXPORT_CODE_VECTORS:
             code_vectors_file.close()
         
         elapsed = int(time.time() - eval_start_time)
         self.log("Evaluation time: %sH:%sM:%sS" % ((elapsed // 60 // 60), (elapsed // 60) % 60, elapsed % 60))
         return ModelEvaluationResults(
-            # topk_acc=topk_accuracy_evaluation_metric.topk_correct_predictions,
+            topk_acc=topk_accuracy_evaluation_metric.topk_correct_predictions,
             subtoken_precision=subtokens_evaluation_metric.precision,
             subtoken_recall=subtokens_evaluation_metric.recall,
-            subtoken_f1=subtokens_evaluation_metric.f1,
-            subtoken_accuracy=subtokens_evaluation_metric.accuracy,
-            subtoken_error_rate=subtokens_evaluation_metric.error_rate,
-            subtoken_true_positives=subtokens_evaluation_metric.nr_true_positives,
-            subtoken_true_negatives=subtokens_evaluation_metric.nr_true_negatives,
-            subtoken_false_positives=subtokens_evaluation_metric.nr_false_positives,
-            subtoken_false_negatives=subtokens_evaluation_metric.nr_false_negatives,
-            subtoken_tnr=subtokens_evaluation_metric.true_negatives_rate,
-            subtoken_fpr=subtokens_evaluation_metric.false_positives_rate
-            )
+            subtoken_f1=subtokens_evaluation_metric.f1)
 
     def _build_tf_training_graph(self, input_tensors):
         # Use `_TFTrainModelInputTensorsFormer` to access input tensors by name.
@@ -457,31 +446,16 @@ class Code2VecModel(Code2VecModelBase):
             tf.compat.v1.tables_initializer()))
         self.log('Initalized variables')
 
+
 class SubtokensEvaluationMetric:
     def __init__(self, filter_impossible_names_fn):
         self.nr_true_positives: int = 0
         self.nr_false_positives: int = 0
-        self.nr_true_negatives: int = 0
         self.nr_false_negatives: int = 0
         self.nr_predictions: int = 0
-        self.positive: int = 0
         self.filter_impossible_names_fn = filter_impossible_names_fn
 
     def update_batch(self, results):
-        # negative = 'safe'
-        # for original_name, top_words in results:
-        #     prediction = self.filter_impossible_names_fn(top_words)[0]
-        #     if original_name != negative:
-        #         self.positive += 1
-        #         # print('original_label=', original_name, 'top_words=', top_words, 'prediction=', prediction)
-        #     if original_name == negative and prediction == negative:
-        #         self.nr_true_negatives += 1
-        #     elif original_name == negative and prediction != negative:
-        #         self.nr_false_positives += 1
-        #     elif original_name != negative and prediction != negative:
-        #         self.nr_true_positives += 1
-        #     elif original_name != negative and prediction == negative:
-        #         self.nr_false_negatives += 1
         for original_name, top_words in results:
             prediction = self.filter_impossible_names_fn(top_words)[0]
             original_subtokens = Counter(common.get_subtokens(original_name))
@@ -494,15 +468,9 @@ class SubtokensEvaluationMetric:
                                            if element not in predicted_subtokens)
             self.nr_predictions += 1
 
-        # self.log(f"TESTING DATASET SIZE={self.nr_predictions}, POSITIVE/UNSAFE CASES={self.positive} , #FNs={self.nr_false_negatives}, #FPs={self.nr_false_positives}, #TPs={self.nr_true_positives}, #TNs={self.nr_true_negatives}")
-
     @property
     def true_positive(self):
         return self.nr_true_positives / self.nr_predictions
-    
-    @property
-    def true_negative(self):
-        return self.nr_true_negatives / self.nr_predictions
 
     @property
     def false_positive(self):
@@ -513,42 +481,20 @@ class SubtokensEvaluationMetric:
         return self.nr_false_negatives / self.nr_predictions
 
     @property
-    def accuracy(self):
-        return (self.nr_true_positives + self.nr_true_negatives) / (self.nr_true_positives + self.nr_true_negatives + self.nr_false_positives + self.nr_false_negatives)
-
-    @property
-    def true_negatives_rate(self):
-        if self.nr_true_negatives > 0:
-            return self.nr_true_negatives / (self.nr_true_negatives + self.nr_false_positives)
-        return 0
-
-    @property
-    def false_positives_rate(self):
-        if self.nr_false_positives > 0:
-            return self.nr_false_positives / (self.nr_true_negatives + self.nr_false_positives)
-        return 0
-    
-    @property
-    def error_rate(self):
-        return (self.nr_false_positives + self.nr_false_negatives) / (self.nr_true_positives + self.nr_true_negatives + self.nr_false_positives + self.nr_false_negatives)
-
-    @property
     def precision(self):
-        if self.nr_true_positives > 0:
-            return self.nr_true_positives / (self.nr_true_positives + self.nr_false_positives)
-        return 0
+        return self.nr_true_positives / (self.nr_true_positives + self.nr_false_positives)
 
     @property
     def recall(self):
-        if self.nr_true_positives > 0:
-            return self.nr_true_positives / (self.nr_true_positives + self.nr_false_negatives)
-        return 0
+        return self.nr_true_positives / (self.nr_true_positives + self.nr_false_negatives)
 
     @property
     def f1(self):
-        if self.precision > 0 and self.recall > 0:
+        if self.precision + self.recall == 0:
+            return 0
+        else:
             return 2 * self.precision * self.recall / (self.precision + self.recall)
-        return 0
+
 
 class TopKAccuracyEvaluationMetric:
     def __init__(self, top_k: int, get_first_match_word_from_top_predictions_fn):
