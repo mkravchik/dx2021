@@ -164,7 +164,7 @@ def parse_sources(location, out_file_path=combined_jsonl, max_lines=max_lines, c
             dump = True
             if class_mapper is not None:
                 # add only mapped files
-                label, inc_dirs = class_mapper.getFileClass(os.path.sep.join([root, filename]))
+                label, inc_dirs = class_mapper.getFileClass(os.path.sep.join([root, filename]))[:2]
                 if label.lower() == "unknown":
                     dump = False
             if dump:
