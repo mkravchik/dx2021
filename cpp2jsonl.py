@@ -102,7 +102,7 @@ def dump_functions(file_path, project, out_file_path, max_lines = max_lines, min
 
     defns = method_definitions(tu.cursor)
     
-    with open(file_path) as src:
+    with open(file_path, encoding = "ISO-8859-1") as src:
         lines = src.readlines()
 
     file_name = file_path.split(os.sep)[-1]
@@ -156,6 +156,7 @@ def parse_sources(location, out_file_path=combined_jsonl, max_lines=max_lines, c
 
     class_mapper = None
     label = None
+    inc_dirs = None
     if class_map is not None:
         class_mapper = mapper(class_map, location)
 
