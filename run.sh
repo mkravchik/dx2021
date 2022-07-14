@@ -7,8 +7,8 @@
 # ./cli.sh vlc
 #rm ./all.jsonl
 
-DATASET=/mnt/d/GitHub_Clones/scripts/C_Dataset/test
-DATASET2=/mnt/d/GitHub_Clones/scripts/C_Dataset/test2
+#DATASET=/mnt/d/GitHub_Clones/scripts/C_Dataset/test
+#DATASET2=/mnt/d/GitHub_Clones/scripts/C_Dataset/test2
 DATASET=/home/tomerg1/git/sources
 DATASET2=/home/tomerg1/git/sources
 
