@@ -8,6 +8,8 @@ from tqdm import tqdm
 from ClassMap.classMap import mapper
 import re
 
+DEBUG = False
+
 combined_jsonl = "all.jsonl"
 train_jsonl = "train.jsonl"
 test_jsonl = "test.jsonl"
@@ -94,7 +96,7 @@ def dump_functions(file_path, project, out_file_path, max_lines = max_lines, min
     try:
         tu = index.parse(file_path, args=args,
          options=clang.cindex.TranslationUnit.PARSE_DETAILED_PROCESSING_RECORD)
-        if len(tu.diagnostics):
+        if DEBUG and len(tu.diagnostics):
             print(list(tu.diagnostics)) 
     except Exception as e:
         print(f"Failed parsing {file_path}, error {e}")
@@ -138,7 +140,8 @@ def dump_functions(file_path, project, out_file_path, max_lines = max_lines, min
                 jsonl.write(json_s)
                 jsonl.write(os.linesep)
         #if funcs_found == 0:
-        print(f"{funcs_found} functions found in {file_path}")
+        if DEBUG:
+            print(f"{funcs_found} functions found in {file_path}")
 
 
 def walkdir(folder):
