@@ -2,7 +2,7 @@ import tensorflow as tf
 import numpy as np
 import time
 from typing import Dict, Optional, List, Iterable
-from collections import Counter
+from collections import Counter, defaultdict
 from functools import partial
 
 from path_context_reader import PathContextReader, ModelInputTensorsFormer, ReaderInputTensors, EstimatorAction
@@ -10,6 +10,7 @@ from common import common
 from vocabularies import VocabType
 from config import Config
 from model_base import Code2VecModelBase, ModelEvaluationResults, ModelPredictionResults
+from sklearn.metrics import classification_report, confusion_matrix
 
 
 tf.compat.v1.disable_eager_execution()
@@ -141,8 +142,9 @@ class Code2VecModel(Code2VecModelBase):
                 code_vectors_file = open(self.config.TEST_DATA_PATH + '.vectors', 'w')
             total_predictions = 0
             total_prediction_batches = 0
-            subtokens_evaluation_metric = SubtokensEvaluationMetric(
-                partial(common.filter_impossible_names, self.vocabs.target_vocab.special_words))
+            evaluation_metric = MulticlassEvaluationMetric(#SubtokensEvaluationMetric(
+                partial(common.filter_impossible_names, self.vocabs.target_vocab.special_words),
+                self)
             # topk_accuracy_evaluation_metric = TopKAccuracyEvaluationMetric(
             #     self.config.TOP_K_WORDS_CONSIDERED_DURING_PREDICTION,
             #     partial(common.get_first_match_word_from_top_predictions, self.vocabs.target_vocab.special_words))
@@ -171,7 +173,7 @@ class Code2VecModel(Code2VecModelBase):
 
                     self._log_predictions_during_evaluation(zip(original_names, top_words), log_output_file)
                     # topk_accuracy_evaluation_metric.update_batch(zip(original_names, top_words))
-                    subtokens_evaluation_metric.update_batch(zip(original_names, top_words))
+                    evaluation_metric.update_batch(zip(original_names, top_words))
 
                     total_predictions += len(original_names)
                     total_prediction_batches += 1
@@ -190,19 +192,22 @@ class Code2VecModel(Code2VecModelBase):
         
         elapsed = int(time.time() - eval_start_time)
         self.log("Evaluation time: %sH:%sM:%sS" % ((elapsed // 60 // 60), (elapsed // 60) % 60, elapsed % 60))
+        
+        evaluation_metric.report()
+
         return ModelEvaluationResults(
             # topk_acc=topk_accuracy_evaluation_metric.topk_correct_predictions,
-            subtoken_precision=subtokens_evaluation_metric.precision,
-            subtoken_recall=subtokens_evaluation_metric.recall,
-            subtoken_f1=subtokens_evaluation_metric.f1,
-            subtoken_accuracy=subtokens_evaluation_metric.accuracy,
-            subtoken_error_rate=subtokens_evaluation_metric.error_rate,
-            subtoken_true_positives=subtokens_evaluation_metric.nr_true_positives,
-            subtoken_true_negatives=subtokens_evaluation_metric.nr_true_negatives,
-            subtoken_false_positives=subtokens_evaluation_metric.nr_false_positives,
-            subtoken_false_negatives=subtokens_evaluation_metric.nr_false_negatives,
-            subtoken_tnr=subtokens_evaluation_metric.true_negatives_rate,
-            subtoken_fpr=subtokens_evaluation_metric.false_positives_rate
+            subtoken_precision=evaluation_metric.precision,
+            subtoken_recall=evaluation_metric.recall,
+            subtoken_f1=evaluation_metric.f1,
+            subtoken_accuracy=evaluation_metric.accuracy,
+            subtoken_error_rate=evaluation_metric.error_rate,
+            subtoken_true_positives=evaluation_metric.nr_true_positives,
+            subtoken_true_negatives=evaluation_metric.nr_true_negatives,
+            subtoken_false_positives=evaluation_metric.nr_false_positives,
+            subtoken_false_negatives=evaluation_metric.nr_false_negatives,
+            subtoken_tnr=evaluation_metric.true_negatives_rate,
+            subtoken_fpr=evaluation_metric.false_positives_rate
             )
 
     def _build_tf_training_graph(self, input_tensors):
@@ -428,7 +433,7 @@ class Code2VecModel(Code2VecModelBase):
                 if prediction_idx == 0:
                     output_file.write('Original: ' + original_name + ', predicted 1st: ' + predicted_word + '\n')
                 else:
-                    output_file.write('\t\t predicted correctly at rank: ' + str(prediction_idx + 1) + '\n')
+                    output_file.write('Predicted:' + top_predicted_words[0] + '\t\t predicted correctly at rank: ' + str(prediction_idx + 1) + '\n')
             else:
                 output_file.write('No results for predicting: ' + original_name)
 
@@ -498,19 +503,27 @@ class SubtokensEvaluationMetric:
 
     @property
     def true_positive(self):
-        return self.nr_true_positives / self.nr_predictions
+        if self.nr_predictions > 0:
+            return self.nr_true_positives / self.nr_predictions
+        return 0
     
     @property
     def true_negative(self):
-        return self.nr_true_negatives / self.nr_predictions
+        if self.nr_predictions > 0:        
+            return self.nr_true_negatives / self.nr_predictions
+        return 0
 
     @property
     def false_positive(self):
-        return self.nr_false_positives / self.nr_predictions
+        if self.nr_predictions > 0:
+            return self.nr_false_positives / self.nr_predictions
+        return 0
 
     @property
     def false_negative(self):
-        return self.nr_false_negatives / self.nr_predictions
+        if self.nr_predictions > 0:        
+            return self.nr_false_negatives / self.nr_predictions
+        return 0
 
     @property
     def accuracy(self):
@@ -548,6 +561,135 @@ class SubtokensEvaluationMetric:
     def f1(self):
         if self.precision > 0 and self.recall > 0:
             return 2 * self.precision * self.recall / (self.precision + self.recall)
+        return 0
+
+class MulticlassEvaluationMetric:
+    def __init__(self, filter_impossible_names_fn, logger):
+        self.class_metrics = dict()
+        self.class_counts = defaultdict(int)
+        self.filter_impossible_names_fn = filter_impossible_names_fn
+        self.logger = logger
+        self.y_true = []
+        self.y_pred = []
+
+    def log(self, msg):
+        self.logger.log(msg)
+
+    def report(self):
+        labels = sorted(self.class_metrics.keys())
+        self.logger.log("\n" + ",".join(labels) + "\n" + str(confusion_matrix(self.y_true, self.y_pred, labels=labels)))
+        self.logger.log("\n" + classification_report(self.y_true, self.y_pred, zero_division=0, labels=labels))
+
+    def update_batch(self, results):
+        for original_name, top_words in results:
+            if not original_name in self.class_metrics:
+                self.log('New class {}'.format(original_name))
+                self.class_metrics[original_name] = SubtokensEvaluationMetric(self.filter_impossible_names_fn)
+                self.class_counts[original_name] = 0
+            
+            self.class_counts[original_name] += 1
+
+            prediction = self.filter_impossible_names_fn(top_words)[0]
+            if not prediction in self.class_metrics:
+                self.log('New class {}'.format(prediction))
+                self.class_metrics[prediction] = SubtokensEvaluationMetric(self.filter_impossible_names_fn)
+
+            predicted_metric = self.class_metrics[prediction]
+            
+            if original_name == prediction:
+                predicted_metric.nr_true_positives += 1
+            else:
+                predicted_metric.nr_false_positives += 1
+                self.class_metrics[original_name].nr_false_negatives += 1
+
+            predicted_metric.nr_predictions += 1
+            self.y_true.append(original_name)
+            self.y_pred.append(prediction)
+
+
+        # self.log(f"TESTING DATASET SIZE={self.nr_predictions}, POSITIVE/UNSAFE CASES={self.positive} , #FNs={self.nr_false_negatives}, #FPs={self.nr_false_positives}, #TPs={self.nr_true_positives}, #TNs={self.nr_true_negatives}")
+
+    @property
+    def nr_true_positives(self):
+        return sum([m.nr_true_positives for m in self.class_metrics.values()])
+    
+    @property
+    def nr_false_positives(self):
+        return sum([m.nr_false_positives for m in self.class_metrics.values()])
+
+    @property
+    def nr_true_negatives(self):
+        return sum([m.nr_true_negatives for m in self.class_metrics.values()])
+
+    @property
+    def nr_false_negatives(self):
+        return sum([m.nr_false_negatives for m in self.class_metrics.values()])
+
+    @property
+    def true_positive(self):
+        # return sum([m.true_positive for m in self.class_metrics.values()])/len(self.class_metrics)
+        return (sum([self.class_metrics[c].true_positive * self.class_counts[c] for c in self.class_metrics])) / (sum([c for c in self.class_counts.values()]))
+    
+    @property
+    def true_negative(self):
+        # return sum([m.true_negative for m in self.class_metrics.values()])/len(self.class_metrics) 
+        return (sum([self.class_metrics[c].true_negative * self.class_counts[c] for c in self.class_metrics])) / (sum([c for c in self.class_counts.values()]))
+
+    @property
+    def false_positive(self):
+        # return sum([m.false_positive for m in self.class_metrics.values()])/len(self.class_metrics) 
+        return (sum([self.class_metrics[c].false_positive * self.class_counts[c] for c in self.class_metrics])) / (sum([c for c in self.class_counts.values()]))
+
+    @property
+    def false_negative(self):
+        # return sum([m.false_negative for m in self.class_metrics.values()])/len(self.class_metrics) 
+        return (sum([self.class_metrics[c].false_negative * self.class_counts[c] for c in self.class_metrics])) / (sum([c for c in self.class_counts.values()]))
+
+    @property
+    def accuracy(self):
+        return sum([m.nr_true_positives for m in self.class_metrics.values()]) / sum([c for c in self.class_counts.values()])
+
+    @property
+    def true_negatives_rate(self):
+        # if self.nr_true_negatives > 0:
+        #     return self.nr_true_negatives / (self.nr_true_negatives + self.nr_false_positives)
+        return 0
+
+    @property
+    def false_positives_rate(self):
+        # if self.false_positive() > 0:
+        #     return sum([m.false_positive() for m in self.class_metrics.values()]) / (self.nr_true_negatives + self.nr_false_positives)
+        return 0
+    
+    @property
+    def error_rate(self):
+        return (sum([(m.nr_false_positives + m.nr_false_negatives) for m in self.class_metrics.values()])) / (sum([c for c in self.class_counts.values()]))
+
+    @property
+    def precision(self):
+        if self.true_positive > 0:
+            # average
+            # return sum([m.precision() for m in self.class_metrics.values()]) / len(self.class_counts)
+            # weighted
+            return (sum([self.class_metrics[c].precision * self.class_counts[c] for c in self.class_metrics])) / (sum([c for c in self.class_counts.values()]))
+        return 0
+
+    @property
+    def recall(self):
+        if self.true_positive > 0:
+            # average
+            # return sum([m.recall() for m in self.class_metrics.values()]) / len(self.class_counts)
+            # weighted
+            return (sum([self.class_metrics[c].recall * self.class_counts[c] for c in self.class_metrics])) / (sum([c for c in self.class_counts.values()]))
+        return 0
+
+    @property
+    def f1(self):
+        if self.precision > 0 and self.recall > 0:
+            # average
+            # return sum([m.recall() for m in self.class_metrics.values()]) / len(self.class_counts)
+            # weighted
+            return (sum([self.class_metrics[c].f1 * self.class_counts[c] for c in self.class_metrics])) / (sum([c for c in self.class_counts.values()]))
         return 0
 
 class TopKAccuracyEvaluationMetric:

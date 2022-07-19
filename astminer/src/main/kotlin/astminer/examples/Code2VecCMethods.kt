@@ -2,21 +2,17 @@ package astminer.examples
 
 import astminer.cli.separateToken
 import astminer.common.*
-import astminer.common.model.LabeledPathContexts
-import astminer.parse.antlr.javascript.JavaScriptMethodSplitter
-import astminer.parse.antlr.javascript.JavaScriptParser
-import astminer.parse.cpp.FuzzyCppParser
-import astminer.parse.cpp.FuzzyMethodSplitter
-import astminer.paths.*
 import astminer.common.model.*
+import astminer.parse.cpp.FuzzyCppParser
+import astminer.paths.*
 import com.google.gson.Gson
-import java.io.File
-import java.io.InputStream
-import java.io.InputStreamReader
-import java.io.BufferedReader
+import com.google.gson.GsonBuilder
+import java.io.*
+import java.nio.charset.StandardCharsets
 
 // data class Sample (val project: String, val commit_id: String, val target: String, val func: String, val idx: String)
 data class Sample (val project: String, val file: String, val func: String, val label: String)
+data class SampleSnippet (val project: String, val file: String, val snippet: String, val label: String)
 
 fun printPath(path: ASTPath){
     println("The path is $path")
@@ -39,8 +35,12 @@ fun countLinesinStream(content: InputStream) : Int{
 //JavaScriptMethodSplitter is used to extract individual method nodes from the compilation unit tree.
 fun code2vecCMethods(split: String, window: Int, step: Int) {
     val source = "dataset/${split}.jsonl"
+    val source_lines = "dataset/${split}_lines.jsonl"
     val outputDir = "../code2vec"
-
+    val writer = BufferedWriter(
+        OutputStreamWriter(
+        FileOutputStream(source_lines), "UTF-8"))
+    val gson = GsonBuilder().disableHtmlEscaping().create()
     //TODO - here I want to create a sliding window over each function instead
 //    val miner = PathMiner(PathRetrievalSettings(8, 3, 0, 100000000))
 
@@ -55,13 +55,16 @@ fun code2vecCMethods(split: String, window: Int, step: Int) {
         if (sample.label != null && sample.label != ""){
             label = sample.label
         }
-        val fileNode = FuzzyCppParser().parseInputStream(sample.func.byteInputStream()) ?: return@forEachLine
+        val fileNode = FuzzyCppParser().parseInputStream(sample.func.byteInputStream(StandardCharsets.UTF_8)) ?: return@forEachLine
 
         fileNode.preOrder().forEach { it.setNormalizedToken(separateToken(it.getToken())) }
 
         // I want to calculate a number of sliding windows over the function
-        val fileLines = countLinesinStream(sample.func.byteInputStream())
-        println("There are $fileLines lines in this function")
+        val reader = sample.func.byteInputStream(StandardCharsets.UTF_8).bufferedReader()
+        val lines = reader.lines().toArray()
+
+        val fileLines = lines.count().toInt();
+        // println("There are $fileLines lines in this function")
 
         val winStep = if (window == 0) fileLines else step
         for (startLine: Int in 1..fileLines - window step winStep) {
@@ -69,21 +72,27 @@ fun code2vecCMethods(split: String, window: Int, step: Int) {
             val miner = PathMiner(PathRetrievalSettings(8, 3, startLine.toInt(), endLine))
             val paths = miner.retrievePaths(fileNode)
 
-            println(paths.size.toString() + " paths between $startLine - $endLine: ")
-
+            // println(paths.size.toString() + " paths between $startLine - $endLine: ")
 //            paths.forEach{
 //                //println("The path is $it")
 //                printPath(it)
 //            }
 
 //            if (split == "train" && paths.isEmpty()) return@forEachLine
-            if (!paths.isEmpty())
+            if (paths.isNotEmpty())
                 storage.store(
                     LabeledPathContexts(
                         label,
                         paths.map { toPathContext(it) { node -> node.getNormalizedToken() } })
                 )
+                val code_snip = lines.sliceArray(startLine - 1 until endLine)
+                val snip = SampleSnippet(project = sample.project, file = sample.file,
+                    snippet = code_snip.joinToString(separator = "\n "), label = sample.label)
+
+                gson.toJson(snip, writer);
+                writer.newLine();
         }
     }
     storage.close()
+    writer.close()
 }
