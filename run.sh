@@ -7,10 +7,16 @@
 # ./cli.sh vlc
 #rm ./all.jsonl
 
-python ./cpp2jsonl.py -l /mnt/d/GitHub_Clones/scripts/C_Dataset/test -np -m ./ClassMap/classMap.json -jl all_benchmark.jsonl -s -sm
+#DATASET=/mnt/d/GitHub_Clones/scripts/C_Dataset/test
+#DATASET2=/mnt/d/GitHub_Clones/scripts/C_Dataset/test2
+DATASET=/home/tomerg1/git/sources
+DATASET2=/home/tomerg1/git/sources
+
+python ./cpp2jsonl.py -l $DATASET -np -m ./ClassMap/classMap.json -jl all_benchmark.jsonl -s -sm
 # NO SPLIT FOR THE TEST
-python ./cpp2jsonl.py -l /mnt/d/GitHub_Clones/scripts/C_Dataset/test2 -m ./ClassMap/classMap.json -jl test.jsonl -sm
-cp ./train.jsonl astminer/dataset/
+python ./cpp2jsonl.py -l $DATASET2 -m ./ClassMap/classMap.json -jl test.jsonl -sm
+
+cp ./train.jsonl astminer/dataset/all_benchmark
 cp ./test.jsonl astminer/dataset/
 cp ./valid.jsonl astminer/dataset/
 
