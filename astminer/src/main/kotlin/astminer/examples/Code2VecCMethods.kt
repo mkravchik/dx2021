@@ -43,7 +43,6 @@ fun code2vecCMethods(split: String, window: Int, step: Int) {
     val gson = GsonBuilder().disableHtmlEscaping().create()
     //TODO - here I want to create a sliding window over each function instead
 //    val miner = PathMiner(PathRetrievalSettings(8, 3, 0, 100000000))
-
     val storage = Code2VecPathStorage(split, outputDir)
 
     File(source).forEachLine { line ->
@@ -79,7 +78,7 @@ fun code2vecCMethods(split: String, window: Int, step: Int) {
 //            }
 
 //            if (split == "train" && paths.isEmpty()) return@forEachLine
-            if (paths.isNotEmpty())
+            if (paths.isNotEmpty()){
                 storage.store(
                     LabeledPathContexts(
                         label,
@@ -91,6 +90,7 @@ fun code2vecCMethods(split: String, window: Int, step: Int) {
 
                 gson.toJson(snip, writer);
                 writer.newLine();
+            }
         }
     }
     storage.close()
