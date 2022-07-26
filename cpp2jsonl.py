@@ -8,7 +8,7 @@ from tqdm import tqdm
 from ClassMap.classMap import mapper
 import re
 
-DEBUG = False
+DEBUG = True
 
 combined_jsonl = "all.jsonl"
 train_jsonl = "train.jsonl"
@@ -40,7 +40,8 @@ def get_ifdefs(file_path: str) -> list:
     """This function extracts the ifdefs from the file
     Clang does not have any ifdefs defined thus it skips everything under ifdef
     Alternatively, we could remove the ifdefs, but for that we need to use the parser 
-    that will find the matching #else/#endif and I did not find a way to do it yet
+    that will find the matching #else/#endif and I did not find a way to do it yet.
+    Note: this is a very primitive mechanism as it does not work recursively on the file's includes
     Args:
         file_path (_type_): _description_
     """    
@@ -50,7 +51,7 @@ def get_ifdefs(file_path: str) -> list:
     #     print (x.kind)
     #     print ("  " + srcrangestr(x.extent))
     #     print ("  '" + str(x.spelling) + "'")
-    res = ['__KERNEL__']
+    res = []
     try:
         with open(file_path) as src:
             for line in src.readlines(): 
@@ -58,12 +59,12 @@ def get_ifdefs(file_path: str) -> list:
                 # single line, no conditions
                 # A proper treatment requires using a proper preprocessor
                 match = re.findall("#if defined\(([A-Za-z0-9_-]+)\)$", line)
+                if len(match) == 0:
+                    match = re.findall("#ifdef\(([A-Za-z0-9_-]+)\)$", line)
+                if len(match) == 0:
+                    match = re.findall("#ifdef\s+([A-Za-z0-9_-]+)\s*$", line)
                 if len(match):
                     res.append(match[0])
-                else:
-                    match = re.findall("#ifdef\(([A-Za-z0-9_-]+)\)$", line)
-                    if len(match):
-                        res.append(match[0])
     except Exception as e:
         print(f"Failed parsing {file_path}, error {e}")
         return res
@@ -75,22 +76,27 @@ def visit(node: clang.cindex.Cursor):
     for child in node.get_children():
         visit(child)
 
-def dump_functions(file_path, project, out_file_path, max_lines = max_lines, min_lines = 1, label = None, include_dirs = None, dest_set = None):
+def dump_functions(file_path, project, out_file_path, max_lines = max_lines, min_lines = 1,
+    label = None, include_dirs = None, dest_set = None, defines = []):
     # print("dump_functions", file_path, project)
     # necessary to deal with the symlinks
     file_path = os.path.realpath(file_path)
 
     # some libraries put lots of code under if defined - include this code
     args = []
+    for define in defines:
+        args.extend(["-D", define])
     expected_defines = set(get_ifdefs(file_path))
     for define in expected_defines:
         args.extend(["-D", define])
+
+    # print(args)
 
     if include_dirs is not None:
         for inc in include_dirs:
             args.extend(["-I", inc])
 
-        # print(args)
+    # print(args)
 
     index = clang.cindex.Index.create()
     try:
@@ -103,7 +109,7 @@ def dump_functions(file_path, project, out_file_path, max_lines = max_lines, min
         return
 
     defns = method_definitions(tu.cursor)
-    
+
     with open(file_path, encoding = "ISO-8859-1") as src:
         lines = src.readlines()
 
@@ -112,10 +118,11 @@ def dump_functions(file_path, project, out_file_path, max_lines = max_lines, min
     with open(out_file_path, "at") as jsonl:
         funcs_found = 0  
         for function_node in defns:
-            funcs_found += 1
+            # print("DEF: ", function_node.location.file, function_node.displayname)
             if function_node.location.file.name != file_path:
                 continue
             if function_node.extent.end.line - function_node.extent.start.line > min_lines:
+                funcs_found += 1
                 # print(function_node.location.file, function_node.displayname)
                 # TODO - consider columns as well
                 func_lines = lines[function_node.extent.start.line - 1 : function_node.extent.end.line]
@@ -171,7 +178,7 @@ def parse_sources(location, out_file_path=combined_jsonl, max_lines=max_lines, c
             project = root[len(location) + len(os.sep):].split(os.sep)[0]
             if class_mapper is not None:
                 # add only mapped files
-                label, inc_dirs, project = class_mapper.getFileClass(os.path.sep.join([root, filename]))
+                label, inc_dirs, project, defines = class_mapper.getFileClass(os.path.sep.join([root, filename]))
                 if label.lower() == "unknown":
                     dump = False
                 if set_map:
@@ -179,7 +186,8 @@ def parse_sources(location, out_file_path=combined_jsonl, max_lines=max_lines, c
                 else:
                     dest_set = None
             if dump:
-                dump_functions(os.path.join(root, filename), project, out_file_path, max_lines, label=label, include_dirs=inc_dirs, dest_set=dest_set)
+                dump_functions(os.path.join(root, filename), project, out_file_path,
+                 max_lines, label=label, include_dirs=inc_dirs, dest_set=dest_set, defines=defines)
 
 
 def split_labeled_dataset(combined_jsonl_path, val_ratio):
@@ -278,10 +286,16 @@ def split_dataset(combined_jsonl_path, train_ratio, test_ratio, use_defined_set=
     end = l_idx
     _write_splits()
 
-# dump_functions(#"/mnt/d/GitHub_Clones/scripts/C_Dataset/test/check_datasets/UI/7zip/GUI/BenchmarkDialog.cpp",
+# dump_functions(
+#     #"/mnt/d/GitHub_Clones/scripts/C_Dataset/test/check_datasets/UI/7zip/GUI/BenchmarkDialog.cpp",
 #     #"/mnt/d/GitHub_Clones/scripts/C_Dataset/test/check_datasets/Net/poco/Net/src/HTTPHeaderStream.cpp",
-#     "/mnt/d/GitHub_Clones/scripts/C_Dataset/mbedtls/library/aes.c",
-#     "mbedtls", "/tmp/a.jsonl")
+#     # "/mnt/d/GitHub_Clones/scripts/C_Dataset/mbedtls/library/aes.c",
+#     "/mnt/d/GitHub_Clones/scripts/C_Dataset/test/poco/Net/src/HTTPRequestHandler.cpp",
+#     "mbedtls", "/tmp/a.jsonl",
+#     include_dirs = ["/mnt/d/GitHub_Clones/scripts/C_Dataset/test/poco/Crypto/include",
+#         "/mnt/d/GitHub_Clones/scripts/C_Dataset/test/poco/Foundation/include",
+#         "/mnt/d/GitHub_Clones/scripts/C_Dataset/test/poco/Net/include"]
+#     )
 # exit(1)
 
 if __name__ == '__main__':

@@ -25,15 +25,9 @@ DATASET2=/mnt/d/GitHub_Clones/scripts/C_Dataset/test2
 
 for split in train valid test
 do
-    if [ ! -f astminer/dataset/${split}_copy.jsonl ]; then
-        cp astminer/dataset/${split}.jsonl astminer/dataset/${split}_copy.jsonl
-    fi
-    if [ ! -f astminer/dataset/${split}_lines_copy.jsonl ]; then
-        cp astminer/dataset/${split}_lines.jsonl astminer/dataset/${split}_lines_copy.jsonl
-    fi
-    if [ ! -f code2vec/devign.${split}.raw_copy.txt ]; then
-        cp code2vec/devign.${split}.raw.txt code2vec/devign.${split}.raw_copy.txt
-    fi
+    cp astminer/dataset/${split}.jsonl astminer/dataset/${split}_copy.jsonl
+    cp astminer/dataset/${split}_lines.jsonl astminer/dataset/${split}_lines_copy.jsonl
+    cp code2vec/devign.${split}.raw.txt code2vec/devign.${split}.raw_copy.txt
 done
 
 # Remove FileManager from the data
@@ -44,7 +38,7 @@ do
     grep -n \"label\"\:\"FileManager\" astminer/dataset/${split}_lines.jsonl  | cut -d: -f1 > FileManager_line_nums
     sed 's%$%d%' FileManager_line_nums > FileManager_sed_del_lines
     sed -f FileManager_sed_del_lines code2vec/devign.${split}.raw_copy.txt > code2vec/devign.${split}.raw.txt
-    # rm FileManager_line_nums FileManager_sed_del_lines
+    FileManager_line_nums FileManager_sed_del_lines
 
     grep -v \"label\"\:\"FileManager\" astminer/dataset/${split}_lines.jsonl  > astminer/dataset/${split}_lines.jsonl_
     mv astminer/dataset/${split}_lines.jsonl_ astminer/dataset/${split}_lines.jsonl
@@ -57,8 +51,8 @@ do
     cp code2vec/devign.${split}.raw.txt code2vec/devign.${split}.raw_copy_nofm.txt
 done
 
-for project in 7zip esp-idf poco qemu sumatrapdf vlc
-# for project in 7zip 
+# for project in 7zip esp-idf poco qemu sumatrapdf vlc
+for project in 7zip 
 do
     echo Moving $project to from train to test
     
@@ -89,7 +83,11 @@ do
         sed -f ${project}_sed_del_lines astminer/dataset/${split}_lines_copy_nofm.jsonl > astminer/dataset/${split}_lines_no_${project}.jsonl
         echo Should be 0
         grep \"project\"\:\"$project\" astminer/dataset/${split}_lines_no_${project}.jsonl  | wc -l
+
+        rm ${split}_lines_no_${project}.jsonl
     done
+
+    rm code2vec/devign.test.raw.txt astminer/dataset/test_lines_no_${project}.jsonl
 
     cd code2vec
     source preprocess.sh
