@@ -124,7 +124,7 @@ class Code2VecModel(Code2VecModelBase):
             input_tensors = input_iterator.get_next()
 
             self.eval_top_words_op, self.eval_top_values_op, self.eval_original_names_op, _, _, _, _, \
-                self.eval_code_vectors = self._build_tf_test_graph(input_tensors)
+                self.eval_code_vectors = self._build_tf_test_graph(input_tensors, normalize_scores=True)
             if self.saver is None:
                 self.saver = tf.compat.v1.train.Saver()
 
@@ -171,7 +171,7 @@ class Code2VecModel(Code2VecModelBase):
                     top_words = common.binary_to_string_matrix(top_words)  # (batch, top_k)
                     original_names = common.binary_to_string_list(original_names)  # (batch,)
 
-                    self._log_predictions_during_evaluation(zip(original_names, top_words), log_output_file)
+                    self._log_predictions_during_evaluation(zip(original_names, top_words, top_scores), log_output_file)
                     # topk_accuracy_evaluation_metric.update_batch(zip(original_names, top_words))
                     evaluation_metric.update_batch(zip(original_names, top_words))
 
@@ -425,15 +425,19 @@ class Code2VecModel(Code2VecModelBase):
             return None
 
     def _log_predictions_during_evaluation(self, results, output_file):
-        for original_name, top_predicted_words in results:
+        for original_name, top_predicted_words, top_scores in results:
             found_match = common.get_first_match_word_from_top_predictions(
                 self.vocabs.target_vocab.special_words, original_name, top_predicted_words)
             if found_match is not None:
                 prediction_idx, predicted_word = found_match
                 if prediction_idx == 0:
-                    output_file.write('Original: ' + original_name + ', predicted 1st: ' + predicted_word + '\n')
+                    output_file.write('Original: ' + original_name + \
+                        ', predicted 1st: ' + predicted_word + ' ' + str(top_scores[0]) + '\n')
                 else:
-                    output_file.write('Predicted:' + top_predicted_words[0] + '\t\t predicted correctly at rank: ' + str(prediction_idx + 1) + '\n')
+                    output_file.write('Original: ' + original_name + \
+                        ' Predicted:' + top_predicted_words[0] + ' ' \
+                            + str(top_scores[0]) + '\t\t\t predicted correctly at rank: ' \
+                                + str(prediction_idx + 1) + ' ' + str(top_scores[prediction_idx + 1]) + '\n')
             else:
                 output_file.write('No results for predicting: ' + original_name)
 
@@ -577,7 +581,7 @@ class MulticlassEvaluationMetric:
 
     def report(self):
         labels = sorted(self.class_metrics.keys())
-        self.logger.log("\n" + ",".join(labels) + "\n" + str(confusion_matrix(self.y_true, self.y_pred, labels=labels)))
+        self.logger.log("\n" + ",".join(labels) + "\nPredicted (cols), Actual (rows)\n" + str(confusion_matrix(self.y_true, self.y_pred, labels=labels)))
         self.logger.log("\n" + classification_report(self.y_true, self.y_pred, zero_division=0, labels=labels))
 
     def update_batch(self, results):

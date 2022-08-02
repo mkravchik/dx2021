@@ -11,25 +11,28 @@ DATASET=/mnt/d/GitHub_Clones/scripts/C_Dataset/test
 DATASET2=/mnt/d/GitHub_Clones/scripts/C_Dataset/test2
 #DATASET=/home/tomerg1/git/sources
 #DATASET2=/home/tomerg1/git/sources
+SNIPPET_SIZE=10
 
 # If you don't want to re-parse the sourses add -np
-python ./cpp2jsonl.py -l $DATASET -m ./ClassMap/classMap.json -jl all_benchmark.jsonl -s -sm
+python ./cpp2jsonl.py -l $DATASET -m ./ClassMap/classMap.json -jl all_benchmark.jsonl -s -sm -np
 
 # NO SPLIT FOR THE TEST
-python ./cpp2jsonl.py -l $DATASET2 -m ./ClassMap/classMap.json -jl test.jsonl -sm
+python ./cpp2jsonl.py -l $DATASET2 -m ./ClassMap/classMap.json -jl test.jsonl -sm -np
 
 cp ./train.jsonl astminer/dataset/
 cp ./test.jsonl astminer/dataset/
 cp ./valid.jsonl astminer/dataset/
 
-echo Running on code snippets
-cd astminer
-./cli.sh train 10
-./cli.sh test 10
-./cli.sh valid 10
-cd ..
-
-source ./run_cross.sh
+for SNIPPET_SIZE in 10 
+do  
+    echo Running on code snippets of $SNIPPET_SIZE lines
+    cd astminer
+    ./cli.sh train $SNIPPET_SIZE
+    ./cli.sh test $SNIPPET_SIZE
+    ./cli.sh valid $SNIPPET_SIZE
+    cd ..
+    source ./run_cross.sh
+done
 
 # cd ../code2vec
 # source preprocess.sh
