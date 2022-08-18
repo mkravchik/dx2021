@@ -27,9 +27,12 @@ for SNIPPET_SIZE in 10
 do  
     echo Running on code snippets of $SNIPPET_SIZE lines
     cd astminer
-    ./cli.sh train $SNIPPET_SIZE
-    ./cli.sh test $SNIPPET_SIZE
-    ./cli.sh valid $SNIPPET_SIZE
+    for split in train valid test
+    do
+        ./cli.sh ${split} $SNIPPET_SIZE
+        cp ../code2vec/devign.${split}.raw.txt ../code2vec/devign.${split}.raw_backup.txt
+    done
+    
     cd ..
     source ./run_cross.sh
 done
