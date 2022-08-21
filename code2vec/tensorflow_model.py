@@ -1,5 +1,6 @@
 import tensorflow as tf
 import numpy as np
+import pandas as pd
 import time
 from typing import Dict, Optional, List, Iterable
 from collections import Counter, defaultdict
@@ -583,6 +584,7 @@ class MulticlassEvaluationMetric:
         labels = sorted(self.class_metrics.keys())
         self.logger.log("\n" + ",".join(labels) + "\nPredicted (cols), Actual (rows)\n" + str(confusion_matrix(self.y_true, self.y_pred, labels=labels)))
         self.logger.log("\n" + classification_report(self.y_true, self.y_pred, zero_division=0, labels=labels))
+        #self.write_test_res2file()
 
     def update_batch(self, results):
         for original_name, top_words in results:
@@ -612,6 +614,14 @@ class MulticlassEvaluationMetric:
 
 
         # self.log(f"TESTING DATASET SIZE={self.nr_predictions}, POSITIVE/UNSAFE CASES={self.positive} , #FNs={self.nr_false_negatives}, #FPs={self.nr_false_positives}, #TPs={self.nr_true_positives}, #TNs={self.nr_true_negatives}")
+
+    def write_test_res2file(self):
+        labels = sorted(self.class_metrics.keys())
+        if self.logger.config.is_testing and not self.logger.config.is_training:
+            report = classification_report(self.y_true, self.y_pred, zero_division=0, labels=labels, output_dict=True)
+            df_report = pd.DataFrame(report).transpose()
+            df_report.to_csv('res.csv')
+        return
 
     @property
     def nr_true_positives(self):
