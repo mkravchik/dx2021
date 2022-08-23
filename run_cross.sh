@@ -2,7 +2,7 @@
 
 DATASET=/mnt/d/GitHub_Clones/scripts/C_Dataset/test
 DATASET2=/mnt/d/GitHub_Clones/scripts/C_Dataset/test2
-LOOPS=1
+LOOPS=3
 
 while getopts l: flag
 do
@@ -26,7 +26,7 @@ do
 done
 
 for project in 7zip esp-idf poco qemu sumatrapdf vlc
-# for project in 7zip 
+#for project in sumatrapdf vlc
 do
     echo Moving $project from train to test
     
@@ -88,6 +88,7 @@ do
         
         # save the vectors aside - to see if we encode them differently
         mv data/devign/devign.train.c2v.vectors data/devign/devign.train.c2v.vectors.$project.$i
+        mv data/devign/devign.val.c2v.vectors data/devign/devign.val.c2v.vectors.$project.$i
         mv data/devign/devign.test.c2v.vectors data/devign/devign.test.c2v.vectors.$project.$i
     done
 

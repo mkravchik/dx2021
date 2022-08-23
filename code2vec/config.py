@@ -45,7 +45,7 @@ class Config:
         return parser
 
     def set_defaults(self):
-        self.NUM_TRAIN_EPOCHS = 20
+        self.NUM_TRAIN_EPOCHS = 4 #40#20
         self.SAVE_EVERY_EPOCHS = 1
         self.TRAIN_BATCH_SIZE = 1024
         self.TEST_BATCH_SIZE = self.TRAIN_BATCH_SIZE
@@ -53,7 +53,7 @@ class Config:
         self.NUM_BATCHES_TO_LOG_PROGRESS = 100
         self.NUM_TRAIN_BATCHES_TO_EVALUATE = 1800
         self.READER_NUM_PARALLEL_BATCHES = 6  # cpu cores [for tf.contrib.data.map_and_batch() in the reader]
-        self.SHUFFLE_BUFFER_SIZE = 10000
+        self.SHUFFLE_BUFFER_SIZE = 20000#10000
         self.CSV_BUFFER_SIZE = 100 * 1024 * 1024  # 100 MB
         self.MAX_TO_KEEP = 10
 

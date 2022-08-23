@@ -115,7 +115,7 @@ class Code2VecModelBase(abc.ABC):
     @staticmethod
     def _get_num_of_examples_for_dataset(dataset_path: str) -> int:
         dataset_num_examples_file_path = dataset_path + '.num_examples'
-        if os.path.isfile(dataset_num_examples_file_path):
+        if False:#os.path.isfile(dataset_num_examples_file_path):
             with open(dataset_num_examples_file_path, 'r') as file:
                 num_examples_in_dataset = int(file.readline())
         else:

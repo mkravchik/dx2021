@@ -9,6 +9,8 @@ import com.google.gson.Gson
 import com.google.gson.GsonBuilder
 import java.io.*
 import java.nio.charset.StandardCharsets
+import java.nio.file.Files
+import java.nio.file.Paths
 
 // data class Sample (val project: String, val commit_id: String, val target: String, val func: String, val idx: String)
 data class Sample (val project: String, val file: String, val func: String, val label: String)
@@ -44,8 +46,13 @@ fun code2vecCMethods(split: String, window: Int, step: Int) {
     //TODO - here I want to create a sliding window over each function instead
 //    val miner = PathMiner(PathRetrievalSettings(8, 3, 0, 100000000))
     val storage = Code2VecPathStorage(split, outputDir)
+    val totalLines = Files.lines(Paths.get(source), StandardCharsets.UTF_8).count()
 
+    println("There are $totalLines lines in $source")
+    var cnt = 0
     File(source).forEachLine { line ->
+        cnt += 1
+        print("\r$cnt\t\t/$totalLines")
         val sample = Gson().fromJson(line, Sample::class.java)
         var label = sample.project
         // Disregard the warning "Condition 'sample.label != null' is always 'true'" - it is wrong,
@@ -95,4 +102,5 @@ fun code2vecCMethods(split: String, window: Int, step: Int) {
     }
     storage.close()
     writer.close()
+    println("\n$source completed\n")
 }

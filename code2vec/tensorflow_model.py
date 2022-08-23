@@ -1,3 +1,5 @@
+import datetime
+from math import ceil
 import tensorflow as tf
 import numpy as np
 import pandas as pd
@@ -97,10 +99,13 @@ class Code2VecModel(Code2VecModelBase):
                     evaluation_results = self.evaluate()
                     evaluation_results_str = (str(evaluation_results).replace('topk', 'top{}'.format(
                         self.config.TOP_K_WORDS_CONSIDERED_DURING_PREDICTION)))
-                    self.log('After {nr_epochs} epochs -- {evaluation_results}'.format(
-                        nr_epochs=epoch_num,
+                    self.log('After {nr_epochs} epochs ({nr_batches} batches) -- {evaluation_results}'.format(
+                        nr_epochs=epoch_num, nr_batches=batch_num,
                         evaluation_results=evaluation_results_str
                     ))
+                if batch_num >= self.config.train_steps_per_epoch * self.config.NUM_TRAIN_EPOCHS:
+                    self.log('Exiting after %d batches ( %d epochs)' % (batch_num, ceil(self.NUM_TRAIN_EXAMPLES / self.TRAIN_BATCH_SIZE) * batch_num))
+
                     #------END
         except tf.errors.OutOfRangeError:
             pass  # The reader iterator is exhausted and have no more batches to produce.
@@ -160,7 +165,7 @@ class Code2VecModel(Code2VecModelBase):
             # Each iteration = batch. We iterate as long as the tf iterator (reader) yields batches.
             try:
                 while True:
-                    top_words, top_scores, original_names, code_vectors = self.sess.run(
+                    top_words, top_scores, original_names, code_vectors  = self.sess.run(
                         [self.eval_top_words_op, self.eval_top_values_op,
                          self.eval_original_names_op, self.eval_code_vectors],
                     )
@@ -184,6 +189,7 @@ class Code2VecModel(Code2VecModelBase):
                         elapsed = time.time() - start_time
                         # start_time = time.time()
                         self._trace_evaluation(total_predictions, elapsed)
+
             except tf.errors.OutOfRangeError:
                 pass  # reader iterator is exhausted and have no more batches to produce.
             self.log('Done evaluating, epoch reached')
@@ -299,7 +305,7 @@ class Code2VecModel(Code2VecModelBase):
                 shape=(self.vocabs.path_vocab.size, self.config.PATH_EMBEDDINGS_SIZE),
                 dtype=tf.float32, trainable=False)
 
-            targets_vocab = tf.transpose(targets_vocab)  # (dim * 3, target_word_vocab)
+            # targets_vocab = tf.transpose(targets_vocab)  # (dim * 3, target_word_vocab)
 
             # Use `_TFEvaluateModelInputTensorsFormer` to access input tensors by name.
             input_tensors = _TFEvaluateModelInputTensorsFormer().from_model_input_form(input_tensors)
@@ -310,6 +316,14 @@ class Code2VecModel(Code2VecModelBase):
                 tokens_vocab, paths_vocab, attention_param, input_tensors.path_source_token_indices,
                 input_tensors.path_indices, input_tensors.path_target_token_indices,
                 input_tensors.context_valid_mask, is_evaluating=True)
+
+            # logits = tf.matmul(code_vectors, targets_vocab, transpose_b=True)
+            # batch_size = tf.cast(tf.shape(input_tensors.target_index)[0], dtype=tf.float32)
+            # loss = tf.reduce_sum(tf.nn.sparse_softmax_cross_entropy_with_logits(
+            #     labels=tf.reshape(input_tensors.target_index, [-1]),
+            #     logits=logits)) / batch_size
+            loss = tf.constant(0)
+            targets_vocab = tf.transpose(targets_vocab)  # (dim * 3, target_word_vocab)
 
         scores = tf.matmul(code_vectors, targets_vocab)  # (batch, target_word_vocab)
 
@@ -584,7 +598,7 @@ class MulticlassEvaluationMetric:
         labels = sorted(self.class_metrics.keys())
         self.logger.log("\n" + ",".join(labels) + "\nPredicted (cols), Actual (rows)\n" + str(confusion_matrix(self.y_true, self.y_pred, labels=labels)))
         self.logger.log("\n" + classification_report(self.y_true, self.y_pred, zero_division=0, labels=labels))
-        #self.write_test_res2file()
+        self.write_test_res2file()
 
     def update_batch(self, results):
         for original_name, top_words in results:
@@ -620,7 +634,7 @@ class MulticlassEvaluationMetric:
         if self.logger.config.is_testing and not self.logger.config.is_training:
             report = classification_report(self.y_true, self.y_pred, zero_division=0, labels=labels, output_dict=True)
             df_report = pd.DataFrame(report).transpose()
-            df_report.to_csv('res.csv')
+            df_report.to_csv(datetime.datetime.now().strftime("c2v_res_%d_%m_%Y_%H_%M_%S.csv"))
         return
 
     @property
