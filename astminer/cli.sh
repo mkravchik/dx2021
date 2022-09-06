@@ -1,3 +1,3 @@
 #!/bin/bash
 
-java -Xms12G -Xmx16G -jar build/shadow/lib-*.jar "$@"
+java -Xms8G -Xmx16G -jar build/shadow/lib-*.jar "$@"

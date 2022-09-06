@@ -1,7 +1,7 @@
 #!/bin/bash
 
-DATASET=/mnt/d/GitHub_Clones/scripts/C_Dataset/test
-DATASET2=/mnt/d/GitHub_Clones/scripts/C_Dataset/test2
+DATASET=../sources
+DATASET2=../sources
 #DATASET=/home/tomerg1/git/sources
 #DATASET2=/home/tomerg1/git/sources
 SNIPPET_SIZE=10
@@ -43,26 +43,26 @@ do
 done
 
 
-cd ./code2vec
-source preprocess.sh
-for (( i=1; i<=$LOOPS; i++ ))
-do
-    ./train.sh
-    python3 code2vec.py --load models/devign/saved_model --release
-    python3 code2vec.py --load models/devign/saved_model.release --test data/devign/devign.test.c2v
-    # get the code vectors
-    rm data/devign/devign.train.c2v.vectors data/devign/devign.val.c2v.vectors data/devign/devign.test.c2v.vectors 2>/dev/null
-    python3 code2vec.py --load models/devign/saved_model.release --test data/devign/devign.train.c2v --export_code_vectors
-    python3 code2vec.py --load models/devign/saved_model.release --test data/devign/devign.val.c2v --export_code_vectors
-    python3 code2vec.py --load models/devign/saved_model.release --test data/devign/devign.test.c2v --export_code_vectors
+# cd ./code2vec
+# source preprocess.sh
+# for (( i=1; i<=$LOOPS; i++ ))
+# do
+#     ./train.sh
+#     python3 code2vec.py --load models/devign/saved_model --release
+#     python3 code2vec.py --load models/devign/saved_model.release --test data/devign/devign.test.c2v
+#     # get the code vectors
+#     rm data/devign/devign.train.c2v.vectors data/devign/devign.val.c2v.vectors data/devign/devign.test.c2v.vectors 2>/dev/null
+#     python3 code2vec.py --load models/devign/saved_model.release --test data/devign/devign.train.c2v --export_code_vectors
+#     python3 code2vec.py --load models/devign/saved_model.release --test data/devign/devign.val.c2v --export_code_vectors
+#     python3 code2vec.py --load models/devign/saved_model.release --test data/devign/devign.test.c2v --export_code_vectors
 
-    # save the vectors aside - to see if we encode them differently
-    mv data/devign/devign.train.c2v.vectors data/devign/devign.train.c2v.vectors.$i
-    mv data/devign/devign.val.c2v.vectors data/devign/devign.val.c2v.vectors.$i
-    mv data/devign/devign.test.c2v.vectors data/devign/devign.test.c2v.vectors.$i
-done
+#     # save the vectors aside - to see if we encode them differently
+#     mv data/devign/devign.train.c2v.vectors data/devign/devign.train.c2v.vectors.$i
+#     mv data/devign/devign.val.c2v.vectors data/devign/devign.val.c2v.vectors.$i
+#     mv data/devign/devign.test.c2v.vectors data/devign/devign.test.c2v.vectors.$i
+# done
 
-cd ..
+# cd ..
 
 
 

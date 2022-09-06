@@ -1,6 +1,14 @@
 import datetime
 from math import ceil
+import os
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+
 import tensorflow as tf
+# Added to get rid of warnings, but it did not work
+# If you are getting NUMA index warnings use this trick: 
+# https://stackoverflow.com/questions/44232898/memoryerror-in-tensorflow-and-successful-numa-node-read-from-sysfs-had-negativ
+tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
+
 import numpy as np
 import pandas as pd
 import time
@@ -14,7 +22,7 @@ from vocabularies import VocabType
 from config import Config
 from model_base import Code2VecModelBase, ModelEvaluationResults, ModelPredictionResults
 from sklearn.metrics import classification_report, confusion_matrix
-
+import shutil
 
 tf.compat.v1.disable_eager_execution()
 
@@ -47,6 +55,14 @@ class Code2VecModel(Code2VecModelBase):
 
         batch_num = 0
         sum_loss = 0
+        prev_val_loss = 0
+        lowest_loss = 100000000000
+        best_model = ""
+        # TODO - take from config
+        min_delta = 0.001
+        patience = 2
+        patience_cnt = 0
+
         multi_batch_start_time = time.time()
         num_batches_to_save_and_eval = max(int(self.config.train_steps_per_epoch * self.config.SAVE_EVERY_EPOCHS), 1)
 
@@ -103,6 +119,21 @@ class Code2VecModel(Code2VecModelBase):
                         nr_epochs=epoch_num, nr_batches=batch_num,
                         evaluation_results=evaluation_results_str
                     ))
+                    if prev_val_loss:
+                        delta = prev_val_loss - evaluation_results.loss
+                        if delta < min_delta:  # not decreasing enough or even increasing
+                            patience_cnt += 1
+                        else:
+                            patience_cnt = 0
+                    prev_val_loss = evaluation_results.loss
+                    if lowest_loss > evaluation_results.loss:
+                        best_model = model_save_path
+                        lowest_loss = evaluation_results.loss    
+                        self.log("%s is the best model so far, validation loss  %f " % (best_model, evaluation_results.loss))
+                    if patience_cnt >= patience:
+                        self.log("Validation loss  %f not descreasing, early stopping" % (evaluation_results.loss))
+                        break
+
                 if batch_num >= self.config.train_steps_per_epoch * self.config.NUM_TRAIN_EPOCHS:
                     self.log('Exiting after %d batches ( %d epochs)' % (batch_num, ceil(self.NUM_TRAIN_EXAMPLES / self.TRAIN_BATCH_SIZE) * batch_num))
 
@@ -113,8 +144,8 @@ class Code2VecModel(Code2VecModelBase):
         self.log('Done training')
 
         if self.config.MODEL_SAVE_PATH:
-            self._save_inner_model(self.config.MODEL_SAVE_PATH)
-            self.log('Model saved in file: %s' % self.config.MODEL_SAVE_PATH)
+            self._rename_saved_model(best_model, self.config.MODEL_SAVE_PATH)
+            # self._save_inner_model(self.config.MODEL_SAVE_PATH)
 
         elapsed = int(time.time() - start_time)
         self.log("Training time: %sH:%sM:%sS\n" % ((elapsed // 60 // 60), (elapsed // 60) % 60, elapsed % 60))
@@ -130,7 +161,7 @@ class Code2VecModel(Code2VecModelBase):
             input_tensors = input_iterator.get_next()
 
             self.eval_top_words_op, self.eval_top_values_op, self.eval_original_names_op, _, _, _, _, \
-                self.eval_code_vectors = self._build_tf_test_graph(input_tensors, normalize_scores=True)
+                self.eval_code_vectors, self.loss = self._build_tf_test_graph(input_tensors, normalize_scores=True)
             if self.saver is None:
                 self.saver = tf.compat.v1.train.Saver()
 
@@ -148,6 +179,7 @@ class Code2VecModel(Code2VecModelBase):
                 code_vectors_file = open(self.config.TEST_DATA_PATH + '.vectors', 'w')
             total_predictions = 0
             total_prediction_batches = 0
+            total_loss = 0
             evaluation_metric = MulticlassEvaluationMetric(#SubtokensEvaluationMetric(
                 partial(common.filter_impossible_names, self.vocabs.target_vocab.special_words),
                 self)
@@ -165,9 +197,9 @@ class Code2VecModel(Code2VecModelBase):
             # Each iteration = batch. We iterate as long as the tf iterator (reader) yields batches.
             try:
                 while True:
-                    top_words, top_scores, original_names, code_vectors  = self.sess.run(
+                    top_words, top_scores, original_names, code_vectors, loss  = self.sess.run(
                         [self.eval_top_words_op, self.eval_top_values_op,
-                         self.eval_original_names_op, self.eval_code_vectors],
+                         self.eval_original_names_op, self.eval_code_vectors, self.loss],
                     )
 
                     # shapes:
@@ -189,6 +221,7 @@ class Code2VecModel(Code2VecModelBase):
                         elapsed = time.time() - start_time
                         # start_time = time.time()
                         self._trace_evaluation(total_predictions, elapsed)
+                    total_loss += loss
 
             except tf.errors.OutOfRangeError:
                 pass  # reader iterator is exhausted and have no more batches to produce.
@@ -214,7 +247,8 @@ class Code2VecModel(Code2VecModelBase):
             subtoken_false_positives=evaluation_metric.nr_false_positives,
             subtoken_false_negatives=evaluation_metric.nr_false_negatives,
             subtoken_tnr=evaluation_metric.true_negatives_rate,
-            subtoken_fpr=evaluation_metric.false_positives_rate
+            subtoken_fpr=evaluation_metric.false_positives_rate, 
+            loss=total_loss/float(total_prediction_batches)
             )
 
     def _build_tf_training_graph(self, input_tensors):
@@ -305,8 +339,6 @@ class Code2VecModel(Code2VecModelBase):
                 shape=(self.vocabs.path_vocab.size, self.config.PATH_EMBEDDINGS_SIZE),
                 dtype=tf.float32, trainable=False)
 
-            # targets_vocab = tf.transpose(targets_vocab)  # (dim * 3, target_word_vocab)
-
             # Use `_TFEvaluateModelInputTensorsFormer` to access input tensors by name.
             input_tensors = _TFEvaluateModelInputTensorsFormer().from_model_input_form(input_tensors)
             # shape of (batch, 1) for input_tensors.target_string
@@ -317,12 +349,12 @@ class Code2VecModel(Code2VecModelBase):
                 input_tensors.path_indices, input_tensors.path_target_token_indices,
                 input_tensors.context_valid_mask, is_evaluating=True)
 
-            # logits = tf.matmul(code_vectors, targets_vocab, transpose_b=True)
-            # batch_size = tf.cast(tf.shape(input_tensors.target_index)[0], dtype=tf.float32)
-            # loss = tf.reduce_sum(tf.nn.sparse_softmax_cross_entropy_with_logits(
-            #     labels=tf.reshape(input_tensors.target_index, [-1]),
-            #     logits=logits)) / batch_size
-            loss = tf.constant(0)
+            logits = tf.matmul(code_vectors, targets_vocab, transpose_b=True)
+            batch_size = tf.cast(tf.shape(input_tensors.target_index)[0], dtype=tf.float32)
+            loss = tf.reduce_sum(tf.nn.sparse_softmax_cross_entropy_with_logits(
+                labels=tf.reshape(input_tensors.target_index, [-1]),
+                logits=logits)) / batch_size
+            # loss = tf.constant(0)
             targets_vocab = tf.transpose(targets_vocab)  # (dim * 3, target_word_vocab)
 
         scores = tf.matmul(code_vectors, targets_vocab)  # (batch, target_word_vocab)
@@ -337,7 +369,7 @@ class Code2VecModel(Code2VecModelBase):
             top_scores = tf.nn.softmax(top_scores)
 
         return top_words, top_scores, original_words, attention_weights, input_tensors.path_source_token_strings, \
-               input_tensors.path_strings, input_tensors.path_target_token_strings, code_vectors
+               input_tensors.path_strings, input_tensors.path_target_token_strings, code_vectors, loss
 
     def predict(self, predict_data_lines: Iterable[str]) -> List[ModelPredictionResults]:
         if self.predict_reader is None:
@@ -349,7 +381,7 @@ class Code2VecModel(Code2VecModelBase):
 
             self.predict_top_words_op, self.predict_top_values_op, self.predict_original_names_op, \
             self.attention_weights_op, self.predict_source_string, self.predict_path_string, \
-            self.predict_path_target_string, self.predict_code_vectors = \
+            self.predict_path_target_string, self.predict_code_vectors, _ = \
                 self._build_tf_test_graph(reader_output, normalize_scores=True)
 
             self._initialize_session_variables()
@@ -407,6 +439,20 @@ class Code2VecModel(Code2VecModelBase):
             self.saver.restore(sess, self.config.MODEL_LOAD_PATH)
             self.log('Done loading model weights')
 
+    def _rename_saved_model(self, old, new):
+        """
+            Loads a saved model and saves it with a different name.
+            WARNING - overwrites the session weigths.
+            TODO: consider using a different session
+        """
+        if self.sess is not None:
+            self.log('Loading model weights from: ' + old)
+            self.saver.restore(self.sess, old)
+            self.log('Done loading model weights, saving to ' + new)
+            self.saver.save(self.sess, new)
+            self.log('Done saving')
+
+
     def _get_vocab_embedding_as_np_array(self, vocab_type: VocabType) -> np.ndarray:
         assert vocab_type in VocabType
         vocab_tf_variable_name = self.vocab_type_to_tf_variable_name_mapping[vocab_type]
@@ -416,7 +462,7 @@ class Code2VecModel(Code2VecModelBase):
                                                  model_input_tensors_former=_TFEvaluateModelInputTensorsFormer(),
                                                  config=self.config, estimator_action=EstimatorAction.Evaluate)
             input_iterator = tf.compat.v1.data.make_initializable_iterator(self.eval_reader.get_dataset())
-            _, _, _, _, _, _, _, _ = self._build_tf_test_graph(input_iterator.get_next())
+            _, _, _, _, _, _, _, _, _ = self._build_tf_test_graph(input_iterator.get_next())
 
         if vocab_type is VocabType.Token:
             shape = (self.vocabs.token_vocab.size, self.config.TOKEN_EMBEDDINGS_SIZE)
@@ -598,7 +644,7 @@ class MulticlassEvaluationMetric:
         labels = sorted(self.class_metrics.keys())
         self.logger.log("\n" + ",".join(labels) + "\nPredicted (cols), Actual (rows)\n" + str(confusion_matrix(self.y_true, self.y_pred, labels=labels)))
         self.logger.log("\n" + classification_report(self.y_true, self.y_pred, zero_division=0, labels=labels))
-        self.write_test_res2file()
+        # self.write_test_res2file()
 
     def update_batch(self, results):
         for original_name, top_words in results:
@@ -760,7 +806,7 @@ class _TFEvaluateModelInputTensorsFormer(ModelInputTensorsFormer):
         return (input_tensors.target_string, input_tensors.path_source_token_indices, input_tensors.path_indices,
                 input_tensors.path_target_token_indices, input_tensors.context_valid_mask,
                 input_tensors.path_source_token_strings, input_tensors.path_strings,
-                input_tensors.path_target_token_strings)
+                input_tensors.path_target_token_strings, input_tensors.target_index)
 
     def from_model_input_form(self, input_row) -> ReaderInputTensors:
         return ReaderInputTensors(
@@ -771,5 +817,6 @@ class _TFEvaluateModelInputTensorsFormer(ModelInputTensorsFormer):
             context_valid_mask=input_row[4],
             path_source_token_strings=input_row[5],
             path_strings=input_row[6],
-            path_target_token_strings=input_row[7]
+            path_target_token_strings=input_row[7],
+            target_index=input_row[8]
         )
