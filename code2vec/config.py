@@ -55,7 +55,8 @@ class Config:
         self.READER_NUM_PARALLEL_BATCHES = 6  # cpu cores [for tf.contrib.data.map_and_batch() in the reader]
         self.SHUFFLE_BUFFER_SIZE = 20000#10000
         self.CSV_BUFFER_SIZE = 100 * 1024 * 1024  # 100 MB
-        self.MAX_TO_KEEP = 10
+        self.MAX_TO_KEEP = 20
+        self.PATIENCE = 4
 
         # labels
         self.POSITIVE = 'vuln'
@@ -63,9 +64,9 @@ class Config:
 
         # model hyper-params
         self.MAX_CONTEXTS = 200
-        self.MAX_TOKEN_VOCAB_SIZE = 1301136
+        self.MAX_TOKEN_VOCAB_SIZE = 2000#1301136
         self.MAX_TARGET_VOCAB_SIZE = 261245
-        self.MAX_PATH_VOCAB_SIZE = 911417
+        self.MAX_PATH_VOCAB_SIZE = 2000#911417
         self.DEFAULT_EMBEDDINGS_SIZE = 128
         self.TOKEN_EMBEDDINGS_SIZE = self.DEFAULT_EMBEDDINGS_SIZE
         self.PATH_EMBEDDINGS_SIZE = self.DEFAULT_EMBEDDINGS_SIZE

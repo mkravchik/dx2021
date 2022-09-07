@@ -60,7 +60,7 @@ class Code2VecModel(Code2VecModelBase):
         best_model = ""
         # TODO - take from config
         min_delta = 0.001
-        patience = 2
+        patience = self.config.PATIENCE
         patience_cnt = 0
 
         multi_batch_start_time = time.time()
