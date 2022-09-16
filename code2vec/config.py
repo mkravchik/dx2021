@@ -57,6 +57,7 @@ class Config:
         self.CSV_BUFFER_SIZE = 100 * 1024 * 1024  # 100 MB
         self.MAX_TO_KEEP = 20
         self.PATIENCE = 4
+        self.USE_BEST_MODEL = False
 
         # labels
         self.POSITIVE = 'vuln'
@@ -64,7 +65,7 @@ class Config:
 
         # model hyper-params
         self.MAX_CONTEXTS = 200
-        self.MAX_TOKEN_VOCAB_SIZE = 2000#1301136
+        self.MAX_TOKEN_VOCAB_SIZE = 1#2000#1301136
         self.MAX_TARGET_VOCAB_SIZE = 261245
         self.MAX_PATH_VOCAB_SIZE = 2000#911417
         self.DEFAULT_EMBEDDINGS_SIZE = 128

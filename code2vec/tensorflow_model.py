@@ -144,8 +144,10 @@ class Code2VecModel(Code2VecModelBase):
         self.log('Done training')
 
         if self.config.MODEL_SAVE_PATH:
-            self._rename_saved_model(best_model, self.config.MODEL_SAVE_PATH)
-            # self._save_inner_model(self.config.MODEL_SAVE_PATH)
+            if self.config.USE_BEST_MODEL:
+                self._rename_saved_model(best_model, self.config.MODEL_SAVE_PATH)
+            else:
+                self._save_inner_model(self.config.MODEL_SAVE_PATH)
 
         elapsed = int(time.time() - start_time)
         self.log("Training time: %sH:%sM:%sS\n" % ((elapsed // 60 // 60), (elapsed // 60) % 60, elapsed % 60))

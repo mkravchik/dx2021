@@ -191,18 +191,65 @@ def parse_sources(location, out_file_path=combined_jsonl, max_lines=max_lines, c
 
 
 def split_labeled_dataset(combined_jsonl_path, val_ratio):
+    """
+    This function opens the combined file and writes each line into its designated set
+    If no validation lines were found, the train set is split into train and validation
+    according to the given ratio
+    """
+
+    # to save memory, first read though the file looking for the validation set
+    validation_present = False
     with open(combined_jsonl_path) as src:
-        lines = src.readlines()
+        for line in src:
+            if len(line):
+                func = json.loads(line)
+                dest_set = func.get('set', None)
+                if dest_set == 'validation':
+                    validation_present = True
+                    print("Validation set found")
+                    break
 
     train_f = open(train_jsonl, "wt")
     test_f = open(test_jsonl, "wt")
     valid_f = open(valid_jsonl, "wt")
+
+    if validation_present:
+        with open(combined_jsonl_path) as src:
+            train_cnt = valid_cnt = test_cnt = 0
+            for line in src:
+                try:
+                    if len(line):
+                        func = json.loads(line)
+                        dest_set = func.get('set', None)
+                        if dest_set is not None:
+                            clean_line = json.dumps(func)+os.linesep
+                            if dest_set == 'train':
+                                train_f.write(clean_line)
+                                train_cnt += 1
+                            elif dest_set == 'validation':
+                                valid_f.write(clean_line)
+                                valid_cnt += 1
+                            elif dest_set == 'test':
+                                test_f.write(clean_line)
+                                test_cnt += 1
+                            else:
+                                print("Unknown destination: " + line)
+                except Exception as e:
+                    print("Skipping invalid line", line[:160])
+        print(f"train {train_cnt}, val {valid_cnt}, test {test_cnt} ")
+        return
+
+    with open(combined_jsonl_path) as src:
+        lines = src.readlines()
+
     curr_proj = ""
     curr_label = ""   
     train_lines = []
+    valid_lines = []
 
     def _write_splits():
         nonlocal train_lines
+
         train_end = len(train_lines) - int(len(train_lines)*val_ratio)
         for idx in range(train_end):
             train_f.write(train_lines[idx])
@@ -225,6 +272,8 @@ def split_labeled_dataset(combined_jsonl_path, val_ratio):
                 if dest_set is not None:
                     del func['set']
                 clean_line = json.dumps(func)+os.linesep
+                if dest_set == 'train':
+                    train_lines.append(clean_line)
                 if dest_set == 'train':
                     train_lines.append(clean_line)
                 else:

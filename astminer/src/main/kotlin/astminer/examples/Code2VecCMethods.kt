@@ -99,6 +99,7 @@ fun code2vecCMethods(split: String, window: Int, step: Int) {
                 writer.newLine();
             }
         }
+        System.gc()
     }
     storage.close()
     writer.close()
