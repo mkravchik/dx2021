@@ -5,7 +5,7 @@
 DATASET=../sources
 DATASET2=../sources
 
-LOOPS=3
+LOOPS=1
 
 while getopts l: flag
 do
@@ -21,8 +21,8 @@ done
 # and devign.{train, valid}.raw.txt in code2vec
 # running from the root directory
 # PROJECTS_TO_DEL="fastsocket openssl"
+# PROJECTS_TO_DEL="fastsocket cpprestsdk easyhttpcpp taox11"
 PROJECTS_TO_DEL=""
-
 for split in train valid #test
 do
     # first restore the original files from the copies if we stopped in the middle
@@ -49,9 +49,17 @@ do
         cp astminer/dataset/${split}_lines.jsonl astminer/dataset/${split}_lines_copy.jsonl
         cp code2vec/devign.${split}.raw.txt code2vec/devign.${split}.raw_copy.txt
     done
+
+    # make sure we copy the full file aside so that we can move the projects out of it later.
+    cp astminer/dataset/${split}.jsonl astminer/dataset/${split}_copy.jsonl
+    cp astminer/dataset/${split}_lines.jsonl astminer/dataset/${split}_lines_copy.jsonl
+    cp code2vec/devign.${split}.raw.txt code2vec/devign.${split}.raw_copy.txt
+
 done
 
-for project in 7zip esp-idf poco qemu sumatrapdf vlc
+# PROJECTS="mbedtls 7zip esp-idf poco qemu sumatrapdf fastsocket openssl vlc botan cryptopp httpp incubator-brpc cpprestsdk cpr DumaisLib easyhttpcpp obs-studio fineftp-server grpc IXWebSocket libashttp libjson-rpc-cpp libtins nanomsg nghttp2 PcapPlusPlus restbed restc-cpp seastar sockpp tacopie taox11 uvw libtomcrypt imgui nana nanogui wxWidgets xtd qtbase libui JUCE gtk"
+PROJECTS="7zip esp-idf poco qemu sumatrapdf fastsocket openssl vlc botan cryptopp httpp incubator-brpc cpprestsdk cpr DumaisLib easyhttpcpp obs-studio fineftp-server grpc IXWebSocket libashttp libjson-rpc-cpp libtins nanomsg nghttp2 PcapPlusPlus restbed restc-cpp seastar sockpp tacopie taox11 uvw libtomcrypt imgui nana nanogui wxWidgets xtd qtbase libui JUCE gtk"
+for project in $PROJECTS #7zip esp-idf poco qemu sumatrapdf vlc
 #for project in sumatrapdf vlc
 do
     echo Moving $project from train to test

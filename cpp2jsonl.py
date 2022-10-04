@@ -284,7 +284,7 @@ def split_labeled_dataset(combined_jsonl_path, val_ratio):
 
     _write_splits()
 
-def split_dataset(combined_jsonl_path, train_ratio, test_ratio, use_defined_set=False):
+def split_dataset(combined_jsonl_path, train_ratio, test_ratio, use_defined_set=False, write_lines=False):
     # we need to read the lines counting them for each project, then split
     # assumptions:
     # 1. Continuity of the projects in the combined file
@@ -300,6 +300,12 @@ def split_dataset(combined_jsonl_path, train_ratio, test_ratio, use_defined_set=
     train_f = open(train_jsonl, "wt")
     test_f = open(test_jsonl, "wt")
     valid_f = open(valid_jsonl, "wt")
+
+    if write_lines:
+        train_lines_f = open("train_line_nums", "wt")
+        valid_lines_f = open("valid_line_nums", "wt")
+
+
     curr_proj = ""
     start = -1
     end = -1
@@ -310,10 +316,15 @@ def split_dataset(combined_jsonl_path, train_ratio, test_ratio, use_defined_set=
         for idx in range(start, train_end):
             if len(lines[idx]):
                 train_f.write(lines[idx])
+                if write_lines:
+                    train_lines_f.write(str(idx+1)+"\n")
+
         val_end = train_end + int((end - start)*(1.0 - (train_ratio + test_ratio)))
         for idx in range(train_end, val_end):
             if len(lines[idx]):
                 valid_f.write(lines[idx])
+                if write_lines:
+                    valid_lines_f.write(str(idx+1)+"\n")
         for idx in range(val_end, end):
             if len(lines[idx]):
                 test_f.write(lines[idx])
@@ -358,12 +369,13 @@ if __name__ == '__main__':
     parser.add_argument("-maxl", "--max_lines", type=int, help="The number of function lines to keep. 0 means - use the entire function. Negative values keep the last lines. Defaults to %d." % max_lines, default=max_lines)
     parser.add_argument("-m", "--class_map", help="Class mapping json file location.")
     parser.add_argument("-sm", "--set_map", help="Use set label from the class map. Defaults to false.", action='store_true')
+    parser.add_argument("-ln", "--line_nums", help="Create files with the selected lines numbers for each set.", action='store_true')
     args = parser.parse_args()
     print(args)
     if not args.no_parse:
         parse_sources(args.location, args.jsonl_location, args.max_lines, args.class_map, args.set_map)
     if args.split:
-        split_dataset(args.jsonl_location, args.train_ratio, args.test_ratio, args.set_map)
+        split_dataset(args.jsonl_location, args.train_ratio, args.test_ratio, args.set_map, args.line_nums)
 
 # dump_functions("/mnt/d/GitHub_Clones/scripts/C_Dataset/vlc/src/test/shared_data_ptr.cpp"
 #     # sys.argv[1]

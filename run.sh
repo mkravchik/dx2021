@@ -34,8 +34,8 @@ done
 #     do
 #         ./cli.sh ${split} $SNIPPET_SIZE
 #         cp ../code2vec/devign.${split}.raw.txt ../code2vec/devign.${split}.raw_backup.txt
-#         cp dataset/${split}.jsonl astminer/dataset/${split}_backup.jsonl
-#         cp dataset/${split}_lines.jsonl astminer/dataset/${split}_lines_backup.jsonl
+#         cp dataset/${split}.jsonl dataset/${split}_backup.jsonl
+#         cp dataset/${split}_lines.jsonl dataset/${split}_lines_backup.jsonl
 #     done
     
 #     cd ..

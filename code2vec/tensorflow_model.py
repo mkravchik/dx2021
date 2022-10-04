@@ -55,8 +55,16 @@ class Code2VecModel(Code2VecModelBase):
 
         batch_num = 0
         sum_loss = 0
-        prev_val_loss = 0
-        lowest_loss = 100000000000
+        prev_val_crit = 0
+        if self.config.STOP_ON_LOSS:
+            best_crit = 100000000000
+            better_op = lambda best, curr : best > curr
+            delta_op = lambda prev, curr :  prev - curr
+        else:
+            best_crit = 0
+            better_op = lambda best, curr : best < curr
+            delta_op = lambda prev, curr :  curr - prev
+
         best_model = ""
         # TODO - take from config
         min_delta = 0.001
@@ -119,19 +127,26 @@ class Code2VecModel(Code2VecModelBase):
                         nr_epochs=epoch_num, nr_batches=batch_num,
                         evaluation_results=evaluation_results_str
                     ))
-                    if prev_val_loss:
-                        delta = prev_val_loss - evaluation_results.loss
+
+                    if self.config.STOP_ON_LOSS:
+                        curr_crit = evaluation_results.loss
+                    else:
+                        curr_crit = evaluation_results.subtoken_accuracy # loss                        
+                    if prev_val_crit:
+                        delta = delta_op(prev_val_crit, curr_crit)
                         if delta < min_delta:  # not decreasing enough or even increasing
                             patience_cnt += 1
                         else:
-                            patience_cnt = 0
-                    prev_val_loss = evaluation_results.loss
-                    if lowest_loss > evaluation_results.loss:
+                            patience_cnt -=1 # do not reset at once
+                            if patience_cnt < 0:
+                                patience_cnt = 0
+                    prev_val_crit = curr_crit
+                    if better_op(best_crit, curr_crit):
                         best_model = model_save_path
-                        lowest_loss = evaluation_results.loss    
-                        self.log("%s is the best model so far, validation loss  %f " % (best_model, evaluation_results.loss))
+                        best_crit = curr_crit    
+                        self.log("%s is the best model so far, validation criterium  %f " % (best_model, curr_crit))
                     if patience_cnt >= patience:
-                        self.log("Validation loss  %f not descreasing, early stopping" % (evaluation_results.loss))
+                        self.log("Validation criterium  %f not improving, early stopping" % (curr_crit))
                         break
 
                 if batch_num >= self.config.train_steps_per_epoch * self.config.NUM_TRAIN_EPOCHS:
