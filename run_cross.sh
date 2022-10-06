@@ -57,13 +57,16 @@ do
 
 done
 
+touch code2vec/res.csv
+echo "project,class,precision,recall,f1-score,support" >> code2vec/res.csv
+
 # PROJECTS="mbedtls 7zip esp-idf poco qemu sumatrapdf fastsocket openssl vlc botan cryptopp httpp incubator-brpc cpprestsdk cpr DumaisLib easyhttpcpp obs-studio fineftp-server grpc IXWebSocket libashttp libjson-rpc-cpp libtins nanomsg nghttp2 PcapPlusPlus restbed restc-cpp seastar sockpp tacopie taox11 uvw libtomcrypt imgui nana nanogui wxWidgets xtd qtbase libui JUCE gtk"
 PROJECTS="7zip esp-idf poco qemu sumatrapdf fastsocket openssl vlc botan cryptopp httpp incubator-brpc cpprestsdk cpr DumaisLib easyhttpcpp obs-studio fineftp-server grpc IXWebSocket libashttp libjson-rpc-cpp libtins nanomsg nghttp2 PcapPlusPlus restbed restc-cpp seastar sockpp tacopie taox11 uvw libtomcrypt imgui nana nanogui wxWidgets xtd qtbase libui JUCE gtk"
 for project in $PROJECTS #7zip esp-idf poco qemu sumatrapdf vlc
 #for project in sumatrapdf vlc
 do
     echo Moving $project from train to test
-    
+    echo "$project" >> code2vec/res.csv
     # remove the original test
     rm code2vec/devign.test.raw.txt 2>/dev/null
     rm astminer/dataset/test_lines_no_${project}.jsonl 2>/dev/null
