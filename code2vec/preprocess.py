@@ -27,9 +27,11 @@ def process_file(file_path, data_file_role, dataset_name, word_to_count, path_to
     empty = 0
     max_unfiltered = 0
     output_path = '{}.{}.c2v'.format(dataset_name, data_file_role)
+    is_file_empty = True
     with open(output_path, 'w') as outfile:
         with open(file_path, 'r') as file:
             for line in file:
+                is_file_empty = False
                 parts = line.rstrip('\n').split(' ')
                 target_name = parts[0]
                 contexts = parts[1:]
@@ -66,6 +68,9 @@ def process_file(file_path, data_file_role, dataset_name, word_to_count, path_to
                 total += 1
 
     print('File: ' + file_path)
+    if is_file_empty:
+        print("File is empty")
+        return 0
     print('Average total contexts: ' + str(float(sum_total) / total))
     print('Average final (after sampling) contexts: ' + str(float(sum_sampled) / total))
     print('Total examples: ' + str(total))
