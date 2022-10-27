@@ -661,7 +661,7 @@ class MulticlassEvaluationMetric:
         labels = sorted(self.class_metrics.keys())
         self.logger.log("\n" + ",".join(labels) + "\nPredicted (cols), Actual (rows)\n" + str(confusion_matrix(self.y_true, self.y_pred, labels=labels)))
         self.logger.log("\n" + classification_report(self.y_true, self.y_pred, zero_division=0, labels=labels))
-        # self.write_test_res2file()
+        self.write_test_res2file()
 
     def update_batch(self, results):
         for original_name, top_words in results:
@@ -697,7 +697,17 @@ class MulticlassEvaluationMetric:
         if self.logger.config.is_testing and not self.logger.config.is_training:
             report = classification_report(self.y_true, self.y_pred, zero_division=0, labels=labels, output_dict=True)
             df_report = pd.DataFrame(report).transpose()
-            df_report.to_csv(datetime.datetime.now().strftime("c2v_res_%d_%m_%Y_%H_%M_%S.csv"))
+            df_report.insert(0, 'class', df_report.index)
+            if os.path.exists('res.csv'):
+                df = pd.read_csv('res.csv')
+                current_project = df.iloc[-1]['project']
+                df = df.astype({'class': 'object'})
+                # df_report['project'] = current_project
+                df_report.insert(0, 'project', current_project)
+                df = df.append(df_report)
+                df = df.dropna()
+                df.to_csv('res.csv', index=False)
+            #df_report.to_csv(datetime.datetime.now().strftime("c2v_res_%d_%m_%Y_%H_%M_%S.csv"))
         return
 
     @property
