@@ -10,7 +10,7 @@ from pathlib import Path
 
 
 class ModelEvaluationResults(NamedTuple):
-    # topk_acc: float
+    topk_acc: float
     subtoken_precision: float
     subtoken_recall: float
     subtoken_f1: float
@@ -39,8 +39,8 @@ class ModelEvaluationResults(NamedTuple):
 
     def __str__(self):
         # res_str = 'topk_acc: {topk_acc}, precision: {precision}, recall: {recall}, accuracy: {accuracy}, F1: {f1}, #TPs={tps}, #FNs={fns}'.format(
-        res_str = 'Precision: {precision}, Sensitivity/Recall: {recall}, Accuracy: {accuracy}, Error Rate: {error_rate}, F1: {f1}, #TPs={tps}, #TNs={tns}, #FPs={fps}, #FNs={fns}, TNR={tnr}, FPR={fpr}'.format(
-            # topk_acc=self.topk_acc,
+        res_str = 'topk_acc: {topk_acc}, Precision: {precision}, Sensitivity/Recall: {recall}, Accuracy: {accuracy}, Error Rate: {error_rate}, F1: {f1}, #TPs={tps}, #TNs={tns}, #FPs={fps}, #FNs={fns}, TNR={tnr}, FPR={fpr}'.format(
+            topk_acc=self.topk_acc,
             precision=self.subtoken_precision,
             recall=self.subtoken_recall,
             f1=self.subtoken_f1,

@@ -8,8 +8,8 @@ from sklearn.metrics import classification_report, confusion_matrix
 from sklearn.ensemble import RandomForestClassifier
 import pickle
 from sklearn.decomposition import PCA
-import matplotlib.pyplot as plt
-import seaborn as sns
+# import matplotlib.pyplot as plt
+# import seaborn as sns
 
 def load_vectors(vectors_file : string) -> pd.DataFrame:
     return pd.read_csv(vectors_file, index_col=None, delim_whitespace=True, header=None)
@@ -19,7 +19,7 @@ def load_labels (labels_jsonl) -> List:
     # labels = [json.loads(line)["label"] for line in src.readline()]
     for line in open(labels_jsonl):
         try:
-            labels.append(json.loads(line)["label"])
+            labels.append(json.loads(line)["map_label"])
         except Exception as e:
             print("Skipping invalid line:", line, ".", e)
     return labels
