@@ -20,7 +20,7 @@ test_ratio = 0.1
 max_lines = 0
 
 
-clang_path = "/usr/lib/llvm-10/lib/libclang.so.1"
+clang_path = "C:/Program Files (x86)/Microsoft Visual Studio/2019/Community/VC/Tools/Llvm/x64/bin/libclang.dll"#"/usr/lib/llvm-10/lib/libclang.so.1"
 clang.cindex.Config.set_library_file(clang_path)
 # the API is best described at https://opensource.apple.com/source/lldb/lldb-112/llvm/tools/clang/bindings/python/clang/cindex.py.auto.html
 
@@ -147,7 +147,7 @@ def dump_functions(file_path, project, out_file_path, max_lines = max_lines, min
                 json_s = json.dumps(func_dict)#.replace("\\\\","\\")
 
                 jsonl.write(json_s)
-                jsonl.write(os.linesep)
+                jsonl.write("\n")
         #if funcs_found == 0:
         if DEBUG:
             print(f"{funcs_found} functions found in {file_path}")
@@ -160,7 +160,11 @@ def walkdir(folder):
             yield root, filename
 
 
-def parse_sources(location, out_file_path=combined_jsonl, max_lines=max_lines, class_map=None, set_map=False):
+def parse_sources(location, out_file_path=combined_jsonl, max_lines=max_lines, class_map=None, set_map=False, dump_all=False):
+    
+    # delete the existing out file
+    os.remove(out_file_path)
+    
     # Precomputing files count
     files_count = 0
     for _ in tqdm(walkdir(location)):
@@ -181,7 +185,7 @@ def parse_sources(location, out_file_path=combined_jsonl, max_lines=max_lines, c
             if class_mapper is not None:
                 # add only mapped files
                 label, inc_dirs, project, defines = class_mapper.getFileClass(os.path.sep.join([root, filename]))
-                if label.lower() == "unknown":
+                if label.lower() == "unknown" and not dump_all:
                     dump = False
                 if set_map:
                     dest_set = class_mapper.getProjectSet(project)
@@ -224,7 +228,7 @@ def split_labeled_dataset(combined_jsonl_path, val_ratio):
                         func = json.loads(line)
                         dest_set = func.get('set', None)
                         if dest_set is not None:
-                            clean_line = json.dumps(func)+os.linesep
+                            clean_line = json.dumps(func)+"\n"
                             if dest_set == 'train':
                                 train_f.write(clean_line)
                                 train_cnt += 1
@@ -273,7 +277,7 @@ def split_labeled_dataset(combined_jsonl_path, val_ratio):
                 dest_set = func.get('set', None)
                 if dest_set is not None:
                     del func['set']
-                clean_line = json.dumps(func)+os.linesep
+                clean_line = json.dumps(func)+"\n"
                 if dest_set == 'train':
                     train_lines.append(clean_line)
                 if dest_set == 'train':
@@ -372,10 +376,11 @@ if __name__ == '__main__':
     parser.add_argument("-m", "--class_map", help="Class mapping json file location.")
     parser.add_argument("-sm", "--set_map", help="Use set label from the class map. Defaults to false.", action='store_true')
     parser.add_argument("-ln", "--line_nums", help="Create files with the selected lines numbers for each set.", action='store_true')
+    parser.add_argument("-da", "--dump_all", help="Dump all functions, not just the mapped ones.", action='store_true')
     args = parser.parse_args()
     print(args)
     if not args.no_parse:
-        parse_sources(args.location, args.jsonl_location, args.max_lines, args.class_map, args.set_map)
+        parse_sources(args.location, args.jsonl_location, args.max_lines, args.class_map, args.set_map, args.dump_all)
     if args.split:
         split_dataset(args.jsonl_location, args.train_ratio, args.test_ratio, args.set_map, args.line_nums)
 
