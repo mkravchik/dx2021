@@ -138,7 +138,9 @@ def dump_functions(file_path, project, out_file_path, max_lines = max_lines, min
                 #     print(lines[line - 1], end='')
                 # The replace below is required to get rid of the double backquotes introduced by json's dump and dumps
                 # func_dict = {"project": project, "file":file_name, "func": body, "func_name": function_node.spelling}
-                func_dict = {"project": project, "file":file_name, "func": body, "func_name": function_node.spelling}
+                func_dict = {"project": project, "file":file_name, "func": body,
+                 "start_line": function_node.extent.start.line, "end_line": function_node.extent.end.line,
+                  "func_name": function_node.spelling}
                 if label is not None:
                     func_dict['label'] = label
                 if dest_set is not None:

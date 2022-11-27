@@ -15,8 +15,9 @@ import java.nio.file.Files
 import java.nio.file.Paths
 
 // data class Sample (val project: String, val commit_id: String, val target: String, val func: String, val idx: String)
-data class Sample (val project: String, val file: String, val func: String, val label: String)
-data class SampleSnippet (val project: String, val file: String, val snippet: String, val label: String, val map_label: String)
+// The lines are 1-based and the last line is included
+data class Sample (val project: String, val file: String, val start_line: Int, val end_line: Int, val func: String, val label: String)
+data class SampleSnippet (val project: String, val file: String, val start_line: Int, val end_line: Int, val snippet: String, val label: String, val map_label: String)
 
 fun printPath(path: ASTPath){
     println("The path is $path")
@@ -118,8 +119,8 @@ fun code2vecCMethods(split: String, window: Int, step: Int, method_label: Boolea
                         paths.map { toPathContext(it) { node -> node.getNormalizedToken() } })
                 )
                 val code_snip = lines.sliceArray(startLine - 1 until endLine)
-                val snip = SampleSnippet(project = sample.project, file = sample.file, 
-                    snippet = code_snip.joinToString(separator = "\n "), label = label, map_label=sample.label)
+                val snip = SampleSnippet(project = sample.project, file = sample.file, start_line = sample.start_line + startLine.toInt() - 1,
+                    end_line = sample.start_line + endLine - 1, snippet = code_snip.joinToString(separator = "\n "), label = label, map_label=sample.label)
 
                 gson.toJson(snip, writer);
                 writer.newLine();

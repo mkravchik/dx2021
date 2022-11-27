@@ -24,24 +24,29 @@ def load_labels (labels_jsonl) -> List:
             print("Skipping invalid line:", line, ".", e)
     return labels
 
-def train_or_evaluate_model(vectors_file, labels_jsonl, model_name, train, header, show=False):
+def train_or_evaluate_model(vectors_file, labels_jsonl, model_name, train, header, show=False, remove_unknown=False, max_feats="auto"):
     df_data = load_vectors(vectors_file)
     labels = load_labels(labels_jsonl)
+    df_labels = pd.DataFrame(labels)
+    if remove_unknown:
+        drop_idx = df_labels[ df_labels[0] == 'Unknown' ].index
+        df_data.drop(drop_idx, inplace=True)
+        df_labels.drop(drop_idx, inplace=True)
 
-    print(header, df_data.shape, len(labels))
+    print(header, df_data.shape, df_labels.shape)
     if train:
-        clf = RandomForestClassifier(class_weight='balanced')
-        clf.fit(df_data, labels)
+        clf = RandomForestClassifier(class_weight='balanced', max_features=max_feats)
+        clf.fit(df_data, df_labels[0])
         pickle.dump(clf, open(model_name + ".mdl", 'wb'))
     else:
         clf = pickle.load(open(model_name + ".mdl", 'rb'))
 
     print(header + " metrics\n")
     pred_labels = clf.predict(df_data)
-    print(confusion_matrix(labels, pred_labels ))
-    print(classification_report(labels, pred_labels, zero_division=0))
+    print(confusion_matrix(df_labels[0], pred_labels ))
+    print(classification_report(df_labels[0], pred_labels, zero_division=0))
     if (show):
-        display(df_data, labels, pred_labels, header)
+        display(df_data, df_labels[0], pred_labels, header)
 
 def display(df_vectors : pd.DataFrame, real_labels: List, pred_labels: List, name):
     # pca = PCA(n_components=2)
@@ -71,11 +76,14 @@ if __name__ == '__main__':
     parser.add_argument("-tsj", "--testjsonl", help="C2V test jsonl file location. Used to extract the labels.")
     parser.add_argument("-n", "--name", help="Model name.", default="rf_c2v")
     parser.add_argument("-d", "--display", help="Produce a map of 2-dimensional PCA of the vectors. Defaults to false.", action='store_true')
+    parser.add_argument("-nu", "--no_unknown", help="Remove the Unknown class from evaluation.", action='store_true')
+    parser.add_argument("-mf", "--max_features", help="The number of features to consider when looking for the best split", type=int, default=0)
 
     args = parser.parse_args()
     print(args)
+    max_features = "auto" if args.max_features == 0 else args.max_features
     if args.train is not None:
-        train_or_evaluate_model(args.train, args.trainjsonl, args.name, True, "Train", args.display)
+        train_or_evaluate_model(args.train, args.trainjsonl, args.name, True, "Train", args.display, args.no_unknown, max_features)
     if args.test is not None:
-        train_or_evaluate_model(args.test, args.testjsonl, args.name, False, "Test", args.display)
+        train_or_evaluate_model(args.test, args.testjsonl, args.name, False, "Test", args.display, args.no_unknown, max_features)
     

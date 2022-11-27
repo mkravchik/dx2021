@@ -61,7 +61,7 @@ touch code2vec/res.csv
 echo "project,class,precision,recall,f1-score,support" >> code2vec/res.csv
 
 # PROJECTS="mbedtls 7zip esp-idf poco qemu sumatrapdf fastsocket openssl vlc botan cryptopp httpp incubator-brpc cpprestsdk cpr DumaisLib easyhttpcpp obs-studio fineftp-server grpc IXWebSocket libashttp libjson-rpc-cpp libtins nanomsg nghttp2 PcapPlusPlus restbed restc-cpp seastar sockpp tacopie taox11 uvw libtomcrypt imgui nana nanogui wxWidgets xtd qtbase libui JUCE gtk"
-PROJECTS="7zip esp-idf poco qemu sumatrapdf fastsocket openssl vlc botan cryptopp httpp incubator-brpc cpprestsdk cpr DumaisLib easyhttpcpp obs-studio fineftp-server grpc IXWebSocket libashttp libjson-rpc-cpp libtins nanomsg nghttp2 PcapPlusPlus restbed restc-cpp seastar sockpp tacopie taox11 uvw libtomcrypt imgui nana nanogui wxWidgets xtd qtbase libui JUCE gtk"
+PROJECTS="7zip esp-idf poco qemu sumatrapdf fastsocket openssl vlc botan mbedtls cryptopp httpp" 
 for project in $PROJECTS #7zip esp-idf poco qemu sumatrapdf vlc
 #for project in sumatrapdf vlc
 do
@@ -119,10 +119,16 @@ do
         python3 code2vec.py --load models/devign/saved_model.release --test data/devign/devign.val.c2v --export_code_vectors
         python3 code2vec.py --load models/devign/saved_model.release --test data/devign/devign.test.c2v --export_code_vectors
 
+        echo Random Forest including Unknown    
         python3 ../c2v_vectors_rf.py --train data/devign/devign.train.c2v.vectors --trainjsonl ../astminer/dataset/train_lines_no_${project}.jsonl 
         python3 ../c2v_vectors_rf.py --test data/devign/devign.val.c2v.vectors --testjsonl ../astminer/dataset/valid_lines_no_${project}.jsonl 
         python3 ../c2v_vectors_rf.py --test data/devign/devign.test.c2v.vectors --testjsonl ../astminer/dataset/test_lines_no_${project}.jsonl
         
+        echo Random Forest excluding Unknown    
+        python3 ../c2v_vectors_rf.py --train data/devign/devign.train.c2v.vectors --trainjsonl ../astminer/dataset/train_lines_no_${project}.jsonl --no_unknown
+        python3 ../c2v_vectors_rf.py --test data/devign/devign.val.c2v.vectors --testjsonl ../astminer/dataset/valid_lines_no_${project}.jsonl --no_unknown 
+        python3 ../c2v_vectors_rf.py --test data/devign/devign.test.c2v.vectors --testjsonl ../astminer/dataset/test_lines_no_${project}.jsonl --no_unknown
+
         # save the vectors aside - to see if we encode them differently
         mv data/devign/devign.train.c2v.vectors data/devign/devign.train.c2v.vectors.$project.$i
         mv data/devign/devign.val.c2v.vectors data/devign/devign.val.c2v.vectors.$project.$i
