@@ -50,7 +50,7 @@ export const colorDocument = (textEditor: vscode.TextEditor): void =>
 		try {
 			if (element.length > 0){
 				let snip = JSON.parse(element);
-				if (snip['file'] == fileName){
+				if (snip['file'] === fileName){
 					switch (snip['map_label']){
 						case "crypto":
 							cryptoLines.push({ range: new vscode.Range(snip['start_line'] - 1, 0, snip['end_line'], 0)});
