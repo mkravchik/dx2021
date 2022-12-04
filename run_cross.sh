@@ -119,7 +119,7 @@ do
         # python3 code2vec.py --load models/devign/saved_model.release --test data/devign/devign.val.c2v --export_code_vectors
         python3 code2vec.py --load models/devign/saved_model.release --test data/devign/devign.test.c2v --export_code_vectors
 
-        # echo Random Forest including Unknown    
+        # echo Random Forest including Unknown     
         # python3 ../c2v_vectors_rf.py --train data/devign/devign.train.c2v.vectors --trainjsonl ../astminer/dataset/train_lines_no_${project}.jsonl 
         # python3 ../c2v_vectors_rf.py --test data/devign/devign.val.c2v.vectors --testjsonl ../astminer/dataset/valid_lines_no_${project}.jsonl 
         # python3 ../c2v_vectors_rf.py --test data/devign/devign.test.c2v.vectors --testjsonl ../astminer/dataset/test_lines_no_${project}.jsonl
