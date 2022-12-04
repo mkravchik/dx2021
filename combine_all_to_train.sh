@@ -66,10 +66,15 @@ display_state () {
 # python ./cpp2jsonl.py -l ../sources -jl ./astminer/dataset/all_benchmark_lines.jsonl -s -np --test_ratio 0.0 -ln
 # cp code2vec/devign.all_benchmark.raw.txt code2vec/devign.train_all.raw.txt 
 
-python ./cpp2jsonl.py -l ../sources -jl ./astminer/dataset/all_benchmark_snip_lines.jsonl -s -np --test_ratio 0.0 -ln -lbl map_label
-echo After splitting into train and validation
+# python ./cpp2jsonl.py -l ../sources -jl ./astminer/dataset/all_benchmark_snip_lines.jsonl -s -np --test_ratio 0.0 -ln -lbl map_label
+# echo After splitting into train and validation
 
-cp code2vec/devign.all_benchmark_snip.raw.txt code2vec/devign.train_all.raw.txt 
+# cp code2vec/devign.all_benchmark_snip.raw.txt code2vec/devign.train_all.raw.txt 
+
+python ./cpp2jsonl.py -l ../sources -jl ./astminer/dataset/all_benchmark_all_projects_lines.jsonl -s -np --test_ratio 0.0 -ln -lbl map_label
+echo After splitting into train and validation
+# It's too large to keep another copy. At worst, I'll create it again
+mv code2vec/devign.all_benchmark_all_projects_lines.raw.txt code2vec/devign.train_all.raw.txt 
 
 for split in train valid
 do
