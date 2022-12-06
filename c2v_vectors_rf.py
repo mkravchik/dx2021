@@ -8,8 +8,8 @@ from sklearn.metrics import classification_report, confusion_matrix
 from sklearn.ensemble import RandomForestClassifier
 import pickle
 from sklearn.decomposition import PCA
-import matplotlib.pyplot as plt
-import seaborn as sns
+# import matplotlib.pyplot as plt
+# import seaborn as sns
 
 def load_vectors(vectors_file : string) -> pd.DataFrame:
     return pd.read_csv(vectors_file, index_col=None, delim_whitespace=True, header=None)
@@ -29,6 +29,10 @@ def train_or_evaluate_model(vectors_file, labels_jsonl, model_name, train, heade
     labels = load_labels(labels_jsonl)
 
     print(header, df_data.shape, len(labels))
+    if df_data.shape[0] < len(labels): # I still do not understand why this can happen
+        print("Truncating labels")
+        labels = labels[:df_data.shape[0]]
+
     if train:
         clf = RandomForestClassifier(class_weight='balanced')
         clf.fit(df_data, labels)
