@@ -127,6 +127,7 @@ class MethodNameExtractor(
             }
             methodNameNode.setNormalizedToken("METHOD_NAME")
         }
-        return methodName
+        
+        return separateToken(methodName)
     }
 }

@@ -5,68 +5,82 @@ display_state () {
     wc -l ./$1.jsonl
 }
 
-echo The original state:
+# echo The original state:
 
-for split in train valid test
-do
-    # Restore
-    cp code2vec/devign.${split}.map.raw_backup.txt code2vec/devign.${split}.raw.txt 
-    cp astminer/dataset/${split}.map_backup.jsonl astminer/dataset/${split}.jsonl 
-    cp astminer/dataset/${split}.map_lines_backup.jsonl astminer/dataset/${split}_lines.jsonl 
-    cp ./${split}.map.jsonl ./${split}.jsonl 
-
-    display_state ${split}
-done
-
-# Backup
 # for split in train valid test
 # do
-#     cp code2vec/devign.${split}.raw.txt code2vec/devign.${split}.map.raw_backup.txt
-#     cp astminer/dataset/${split}.jsonl astminer/dataset/${split}.map_backup.jsonl
-#     cp astminer/dataset/${split}_lines.jsonl astminer/dataset/${split}.map_lines_backup.jsonl
-#    cp ./${split}.jsonl ./${split}.map.jsonl
+#     # Restore
+#     cp code2vec/devign.${split}.map.raw_backup.txt code2vec/devign.${split}.raw.txt 
+#     cp astminer/dataset/${split}.map_backup.jsonl astminer/dataset/${split}.jsonl 
+#     cp astminer/dataset/${split}.map_lines_backup.jsonl astminer/dataset/${split}_lines.jsonl 
+#     cp ./${split}.map.jsonl ./${split}.jsonl 
+
+#     display_state ${split}
 # done
 
-# Consolidate everything into train
-for split in valid test
-do
-    cat code2vec/devign.${split}.raw.txt >> code2vec/devign.train.raw.txt
-    cat astminer/dataset/${split}.jsonl >> astminer/dataset/train.jsonl
-    cat astminer/dataset/${split}_lines.jsonl >> astminer/dataset/train_lines.jsonl
-    cat ./${split}.jsonl >> ./train.jsonl
-done
+# # Backup
+# # for split in train valid test
+# # do
+# #     cp code2vec/devign.${split}.raw.txt code2vec/devign.${split}.map.raw_backup.txt
+# #     cp astminer/dataset/${split}.jsonl astminer/dataset/${split}.map_backup.jsonl
+# #     cp astminer/dataset/${split}_lines.jsonl astminer/dataset/${split}.map_lines_backup.jsonl
+# #    cp ./${split}.jsonl ./${split}.map.jsonl
+# # done
 
-# how many lines do we have in train
-echo After moving everything into train
-display_state train
+# # Consolidate everything into train
+# for split in valid test
+# do
+#     cat code2vec/devign.${split}.raw.txt >> code2vec/devign.train.raw.txt
+#     cat astminer/dataset/${split}.jsonl >> astminer/dataset/train.jsonl
+#     cat astminer/dataset/${split}_lines.jsonl >> astminer/dataset/train_lines.jsonl
+#     cat ./${split}.jsonl >> ./train.jsonl
+# done
 
-# Split the train into train-validation 
-mv ./train.jsonl ./all.jsonl # This can be done only once!
+# # how many lines do we have in train
+# echo After moving everything into train
+# display_state train
 
-python ./cpp2jsonl.py -l ../sources -jl ./all.jsonl -s -np --test_ratio 0.0
+# # Split the train into train-validation 
+# mv ./train.jsonl ./all.jsonl # This can be done only once!
 
-cp ./train.jsonl astminer/dataset/
-cp ./test.jsonl astminer/dataset/
-cp ./valid.jsonl astminer/dataset/
+# python ./cpp2jsonl.py -l ../sources -jl ./all.jsonl -s -np --test_ratio 0.0
 
-echo After splitting the train.jsonl into train and validation
-for split in train valid 
-do
-    display_state ${split}
-done
+# cp ./train.jsonl astminer/dataset/
+# cp ./test.jsonl astminer/dataset/
+# cp ./valid.jsonl astminer/dataset/
 
-# ls -lt ./*.jsonl
+# echo After splitting the train.jsonl into train and validation
+# for split in train valid 
+# do
+#     display_state ${split}
+# done
 
-mv ./astminer/dataset/train_lines.jsonl ./astminer/dataset/all_lines.jsonl # This can be done only once!
+# # ls -lt ./*.jsonl
 
-# We need to get the lines so extract the same lines from raw.txt
-python ./cpp2jsonl.py -l ../sources -jl ./astminer/dataset/all_lines.jsonl -s -np --test_ratio 0.0 -ln
+# mv ./astminer/dataset/train_lines.jsonl ./astminer/dataset/all_lines.jsonl # This can be done only once!
 
-cp code2vec/devign.train.raw.txt code2vec/devign.train_all.raw.txt # This can be done only once!
+# # We need to get the lines so extract the same lines from raw.txt
+# python ./cpp2jsonl.py -l ../sources -jl ./astminer/dataset/all_lines.jsonl -s -np --test_ratio 0.0 -ln
+# cp code2vec/devign.train.raw.txt code2vec/devign.train_all.raw.txt # This can be done only once!
+
+# python ./cpp2jsonl.py -l ../sources -jl ./astminer/dataset/all_benchmark_lines.jsonl -s -np --test_ratio 0.0 -ln
+# cp code2vec/devign.all_benchmark.raw.txt code2vec/devign.train_all.raw.txt 
+
+# python ./cpp2jsonl.py -l ../sources -jl ./astminer/dataset/all_benchmark_snip_lines.jsonl -s -np --test_ratio 0.0 -ln -lbl map_label
+# echo After splitting into train and validation
+
+# cp code2vec/devign.all_benchmark_snip.raw.txt code2vec/devign.train_all.raw.txt 
+
+python ./cpp2jsonl.py -l ../sources -jl ./astminer/dataset/all_benchmark_all_projects_lines.jsonl -s -np --test_ratio 0.0 -ln -lbl map_label
+echo After splitting into train and validation
+# It's too large to keep another copy. At worst, I'll create it again
+mv code2vec/devign.all_benchmark_all_projects_lines.raw.txt code2vec/devign.train_all.raw.txt 
 
 for split in train valid
 do
+    echo Calling sed on ${split}_line_nums 
     sed 's%$%p%' ${split}_line_nums > ${split}_sed_choose_lines
+    echo Creating code2vec/devign.${split}.raw.txt  
     sed -n -f ${split}_sed_choose_lines code2vec/devign.train_all.raw.txt > code2vec/devign.${split}.raw.txt
     cp ./${split}.jsonl astminer/dataset/${split}_lines.jsonl
 done
@@ -83,4 +97,10 @@ do
     cp code2vec/devign.${split}.raw.txt code2vec/devign.${split}.raw_backup.txt
     cp astminer/dataset/${split}.jsonl astminer/dataset/${split}_backup.jsonl
     cp astminer/dataset/${split}_lines.jsonl astminer/dataset/${split}_lines_backup.jsonl
+done
+
+echo After splitting the train_lines.jsonl into train and validation
+for split in train valid 
+do
+    display_state ${split}
 done
