@@ -7,6 +7,7 @@ import argparse
 from tqdm import tqdm
 from ClassMap.classMap import mapper
 import re
+import platform
 
 DEBUG = True
 
@@ -19,9 +20,17 @@ train_ratio = 0.8
 test_ratio = 0.1
 max_lines = 0
 
+this_os = platform.system().lower()
+if this_os == 'linux':
+    clang_path = "/usr/lib/llvm-10/lib/libclang.so.1"
+elif this_os == 'windows':
+    clang_path = "C:/Program Files (x86)/Microsoft Visual Studio/2019/Community/VC/Tools/Llvm/x64/bin/libclang.dll"
+else:
+    print("Unknown OS:", this_os, ". Don't know where clang is");
+    exit(1)
 
-clang_path = "/usr/lib/llvm-10/lib/libclang.so.1"
 clang.cindex.Config.set_library_file(clang_path)
+# the API is best described at https://opensource.apple.com/source/lldb/lldb-112/llvm/tools/clang/bindings/python/clang/cindex.py.auto.html
 
 def method_definitions(cursor):
     for i in cursor.walk_preorder():
@@ -136,7 +145,10 @@ def dump_functions(file_path, project, out_file_path, max_lines = max_lines, min
                 # for line in range(function_node.extent.start.line, function_node.extent.end.line + 1):
                 #     print(lines[line - 1], end='')
                 # The replace below is required to get rid of the double backquotes introduced by json's dump and dumps
-                func_dict = {"project": project, "file":file_name, "func": body}
+                # func_dict = {"project": project, "file":file_name, "func": body, "func_name": function_node.spelling}
+                func_dict = {"project": project, "file":file_name, "func": body,
+                 "start_line": function_node.extent.start.line, "end_line": function_node.extent.end.line,
+                  "func_name": function_node.spelling}
                 if label is not None:
                     func_dict['label'] = label
                 if dest_set is not None:
@@ -145,7 +157,7 @@ def dump_functions(file_path, project, out_file_path, max_lines = max_lines, min
                 json_s = json.dumps(func_dict)#.replace("\\\\","\\")
 
                 jsonl.write(json_s)
-                jsonl.write(os.linesep)
+                jsonl.write("\n")
         #if funcs_found == 0:
         if DEBUG:
             print(f"{funcs_found} functions found in {file_path}")
@@ -158,7 +170,12 @@ def walkdir(folder):
             yield root, filename
 
 
-def parse_sources(location, out_file_path=combined_jsonl, max_lines=max_lines, class_map=None, set_map=False):
+def parse_sources(location, out_file_path=combined_jsonl, max_lines=max_lines, class_map=None, set_map=False, dump_all=False):
+    
+    # delete the existing out file
+    if os.path.exists(out_file_path):
+        os.remove(out_file_path)
+    
     # Precomputing files count
     files_count = 0
     for _ in tqdm(walkdir(location)):
@@ -179,7 +196,7 @@ def parse_sources(location, out_file_path=combined_jsonl, max_lines=max_lines, c
             if class_mapper is not None:
                 # add only mapped files
                 label, inc_dirs, project, defines = class_mapper.getFileClass(os.path.sep.join([root, filename]))
-                if label.lower() == "unknown":
+                if label.lower() == "unknown" and not dump_all:
                     dump = False
                 if set_map:
                     dest_set = class_mapper.getProjectSet(project)
@@ -190,7 +207,7 @@ def parse_sources(location, out_file_path=combined_jsonl, max_lines=max_lines, c
                  max_lines, label=label, include_dirs=inc_dirs, dest_set=dest_set, defines=defines)
 
 
-def split_labeled_dataset(combined_jsonl_path, val_ratio):
+def split_labeled_dataset(combined_jsonl_path, val_ratio, label):
     """
     This function opens the combined file and writes each line into its designated set
     If no validation lines were found, the train set is split into train and validation
@@ -222,7 +239,7 @@ def split_labeled_dataset(combined_jsonl_path, val_ratio):
                         func = json.loads(line)
                         dest_set = func.get('set', None)
                         if dest_set is not None:
-                            clean_line = json.dumps(func)+os.linesep
+                            clean_line = json.dumps(func)+"\n"
                             if dest_set == 'train':
                                 train_f.write(clean_line)
                                 train_cnt += 1
@@ -262,16 +279,16 @@ def split_labeled_dataset(combined_jsonl_path, val_ratio):
         try:
             if len(line):
                 func = json.loads(line)
-                if func['project'] != curr_proj or func['label'] != curr_label:
+                if func['project'] != curr_proj or func[label] != curr_label:
                     if curr_proj != "" and curr_label != "":
                         # we completed the previous project
                         _write_splits()
                 curr_proj = func['project']
-                curr_label = func['label']
+                curr_label = func[label]
                 dest_set = func.get('set', None)
                 if dest_set is not None:
                     del func['set']
-                clean_line = json.dumps(func)+os.linesep
+                clean_line = json.dumps(func)+"\n"
                 if dest_set == 'train':
                     train_lines.append(clean_line)
                 if dest_set == 'train':
@@ -284,14 +301,14 @@ def split_labeled_dataset(combined_jsonl_path, val_ratio):
 
     _write_splits()
 
-def split_dataset(combined_jsonl_path, train_ratio, test_ratio, use_defined_set=False, write_lines=False):
+def split_dataset(combined_jsonl_path, train_ratio, test_ratio, use_defined_set=False, write_lines=False, label='label'):
     # we need to read the lines counting them for each project, then split
     # assumptions:
     # 1. Continuity of the projects in the combined file
-    # 2. The entire combined files fits into memory
+    # 2. The entire combined files fit into memory
 
     if use_defined_set:
-        split_labeled_dataset(combined_jsonl_path, 1.0 - (train_ratio + test_ratio))
+        split_labeled_dataset(combined_jsonl_path, 1.0 - (train_ratio + test_ratio), label)
         return
 
     with open(combined_jsonl_path) as src:
@@ -307,6 +324,7 @@ def split_dataset(combined_jsonl_path, train_ratio, test_ratio, use_defined_set=
 
 
     curr_proj = ""
+    curr_label = ""   
     start = -1
     end = -1
     
@@ -328,17 +346,18 @@ def split_dataset(combined_jsonl_path, train_ratio, test_ratio, use_defined_set=
         for idx in range(val_end, end):
             if len(lines[idx]):
                 test_f.write(lines[idx])
-        print("%s: from %d to %d. train_end %d, val_end %d" % (curr_proj, start, end, train_end, val_end))
+        print("%s %s: from %d to %d. train_end %d, val_end %d" % (curr_proj, curr_label, start, end, train_end, val_end))
 
     for l_idx, line in enumerate(lines):
         try:
             func = json.loads(line)
-            if func['project'] != curr_proj:
+            if func['project'] != curr_proj or func[label] != curr_label:
                 end = l_idx
                 if start != -1:
-                    # we completed the previous project
+                    # we completed the previous project or label
                     _write_splits()
                 curr_proj = func['project']
+                curr_label = func[label]
                 start = end
         except Exception as e:
             print("Skipping invalid line", line[:160])
@@ -370,12 +389,14 @@ if __name__ == '__main__':
     parser.add_argument("-m", "--class_map", help="Class mapping json file location.")
     parser.add_argument("-sm", "--set_map", help="Use set label from the class map. Defaults to false.", action='store_true')
     parser.add_argument("-ln", "--line_nums", help="Create files with the selected lines numbers for each set.", action='store_true')
+    parser.add_argument("-da", "--dump_all", help="Dump all functions, not just the mapped ones.", action='store_true')
+    parser.add_argument("-lbl", "--label", help="Label tag, used for equal splitting", default='label')
     args = parser.parse_args()
     print(args)
     if not args.no_parse:
-        parse_sources(args.location, args.jsonl_location, args.max_lines, args.class_map, args.set_map)
+        parse_sources(args.location, args.jsonl_location, args.max_lines, args.class_map, args.set_map, args.dump_all)
     if args.split:
-        split_dataset(args.jsonl_location, args.train_ratio, args.test_ratio, args.set_map, args.line_nums)
+        split_dataset(args.jsonl_location, args.train_ratio, args.test_ratio, args.set_map, args.line_nums, args.label)
 
 # dump_functions("/mnt/d/GitHub_Clones/scripts/C_Dataset/vlc/src/test/shared_data_ptr.cpp"
 #     # sys.argv[1]

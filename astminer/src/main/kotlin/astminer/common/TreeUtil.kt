@@ -85,7 +85,7 @@ fun normalizeToken(token: String, defaultToken: String): String {
  */
 fun splitToSubtokens(token: String) = token
         .trim()
-        .split("(?<=[a-z])(?=[A-Z])|_|[0-9]|(?<=[A-Z])(?=[A-Z][a-z])|\\s+".toRegex())
+        .split("(?<=[a-z])(?=[A-Z])|_|::|[0-9]|(?<=[A-Z])(?=[A-Z][a-z])|\\s+".toRegex())
         .map { s -> normalizeToken(s, "") }
         .filter { it.isNotEmpty() }
         .toList()

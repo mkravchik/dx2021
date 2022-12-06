@@ -13,7 +13,11 @@
    ```sh
    git clone https://github.com/dcoimbra/dx2021.git
    ```
-
+3. Init and update the submodule
+    ```sh
+    git submodule init 
+    git submodule update
+    ```
 ## Extract path-contexts
 The data is in the `astminer/dataset` folder. The dataset is already split into three .jsonl files, for training, validation and testing.
 

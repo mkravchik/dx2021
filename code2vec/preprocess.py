@@ -21,6 +21,7 @@ def save_dictionaries(dataset_name, word_to_count, path_to_count, target_to_coun
 
  
 def process_file(file_path, data_file_role, dataset_name, word_to_count, path_to_count, max_contexts):
+    print("Processing", file_path, data_file_role, dataset_name)
     sum_total = 0
     sum_sampled = 0
     total = 0
@@ -66,8 +67,9 @@ def process_file(file_path, data_file_role, dataset_name, word_to_count, path_to
                 total += 1
 
     print('File: ' + file_path)
-    print('Average total contexts: ' + str(float(sum_total) / total))
-    print('Average final (after sampling) contexts: ' + str(float(sum_sampled) / total))
+    if total:
+        print('Average total contexts: ' + str(float(sum_total) / total))
+        print('Average final (after sampling) contexts: ' + str(float(sum_sampled) / total))
     print('Total examples: ' + str(total))
     print('Empty examples: ' + str(empty))
     print('Max number of contexts per word: ' + str(max_unfiltered))

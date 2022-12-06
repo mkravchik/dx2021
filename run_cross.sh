@@ -1,21 +1,17 @@
 #!/bin/bash
 
-# DATASET=/mnt/d/GitHub_Clones/scripts/C_Dataset/test
-# DATASET2=/mnt/d/GitHub_Clones/scripts/C_Dataset/test2
-DATASET=../sources
-DATASET2=../sources
-
 LOOPS=1
+NAMES=""
 
-while getopts l: flag
+while getopts l:n flag
 do
     case "${flag}" in
         l) LOOPS=${OPTARG};;
+        n) NAMES=1;;
     esac
 done
 
-#DATASET=/home/tomerg1/git/sources
-#DATASET2=/home/tomerg1/git/sources
+echo NAMES $NAMES
 
 # assuming all previous stages were completed and we have ./{train, valid}.jsonl, ./{train, valid}_lines.jsonl in astminer/dataset/
 # and devign.{train, valid}.raw.txt in code2vec
@@ -57,13 +53,15 @@ do
 
 done
 
-# PROJECTS="mbedtls 7zip esp-idf poco qemu sumatrapdf fastsocket openssl vlc botan cryptopp httpp incubator-brpc cpprestsdk cpr DumaisLib easyhttpcpp obs-studio fineftp-server grpc IXWebSocket libashttp libjson-rpc-cpp libtins nanomsg nghttp2 PcapPlusPlus restbed restc-cpp seastar sockpp tacopie taox11 uvw libtomcrypt imgui nana nanogui wxWidgets xtd qtbase libui JUCE gtk"
-PROJECTS="7zip esp-idf poco qemu sumatrapdf fastsocket openssl vlc botan cryptopp httpp incubator-brpc cpprestsdk cpr DumaisLib easyhttpcpp obs-studio fineftp-server grpc IXWebSocket libashttp libjson-rpc-cpp libtins nanomsg nghttp2 PcapPlusPlus restbed restc-cpp seastar sockpp tacopie taox11 uvw libtomcrypt imgui nana nanogui wxWidgets xtd qtbase libui JUCE gtk"
-for project in $PROJECTS #7zip esp-idf poco qemu sumatrapdf vlc
-#for project in sumatrapdf vlc
+touch code2vec/res.csv
+echo "project,class,precision,recall,f1-score,support" >> code2vec/res.csv
+
+PROJECTS="7zip esp-idf poco qemu sumatrapdf fastsocket openssl vlc botan cryptopp httpp incubator-brpc cpprestsdk cpr DumaisLib easyhttpcpp obs-studio fineftp-server IXWebSocket libjson-rpc-cpp libtins nanomsg nghttp2 PcapPlusPlus restc-cpp taox11 uvw libtomcrypt imgui nana nanogui wxWidgets xtd qtbase libui JUCE" # gtk restbed grpc libashttp seastar sockpp tacopie"
+#for project in $PROJECTS #7zip esp-idf poco qemu sumatrapdf vlc
+for project in mbedtls qemu
 do
     echo Moving $project from train to test
-    
+    echo "$project" >> code2vec/res.csv
     # remove the original test
     rm code2vec/devign.test.raw.txt 2>/dev/null
     rm astminer/dataset/test_lines_no_${project}.jsonl 2>/dev/null
@@ -102,27 +100,38 @@ do
     # rm astminer/dataset/test_lines_no_${project}.jsonl 2>/dev/null
 
     cd code2vec
+    train_sh_arg=""
+    c2v_arg=""
+    if [ "$NAMES" != "" ]; then
+        train_sh_arg=-n
+        c2v_arg=--subtokens
+    fi
     
     source preprocess.sh
     for (( i=1; i<=$LOOPS; i++ ))
     do
         echo Iteration $i of $project
-        ./train.sh
-        python3 code2vec.py --load models/devign/saved_model --release
-        python3 code2vec.py --load models/devign/saved_model.release --test data/devign/devign.test.c2v
+
+        ./train.sh $train_sh_arg
+        python3 code2vec.py --load models/devign/saved_model --release  ${c2v_arg}
+        python3 code2vec.py --load models/devign/saved_model.release --test data/devign/devign.test.c2v  ${c2v_arg}
         # get the code vectors
         rm data/devign/devign.train.c2v.vectors 2>/dev/null
-        python3 code2vec.py --load models/devign/saved_model.release --test data/devign/devign.train.c2v --export_code_vectors
-        python3 code2vec.py --load models/devign/saved_model.release --test data/devign/devign.val.c2v --export_code_vectors
-        python3 code2vec.py --load models/devign/saved_model.release --test data/devign/devign.test.c2v --export_code_vectors
+        python3 code2vec.py --load models/devign/saved_model.release --test data/devign/devign.train.c2v --export_code_vectors  ${c2v_arg}
+        # python3 code2vec.py --load models/devign/saved_model.release --test data/devign/devign.val.c2v --export_code_vectors
+        python3 code2vec.py --load models/devign/saved_model.release --test data/devign/devign.test.c2v --export_code_vectors  ${c2v_arg}
 
+        # echo Random Forest including Unknown     
         # python3 ../c2v_vectors_rf.py --train data/devign/devign.train.c2v.vectors --trainjsonl ../astminer/dataset/train_lines_no_${project}.jsonl 
         # python3 ../c2v_vectors_rf.py --test data/devign/devign.val.c2v.vectors --testjsonl ../astminer/dataset/valid_lines_no_${project}.jsonl 
         # python3 ../c2v_vectors_rf.py --test data/devign/devign.test.c2v.vectors --testjsonl ../astminer/dataset/test_lines_no_${project}.jsonl
         
+        echo Random Forest excluding Unknown    
+        python3 ../c2v_vectors_rf.py --train data/devign/devign.train.c2v.vectors --trainjsonl ../astminer/dataset/train_lines_no_${project}.jsonl --no_unknown
+        python3 ../c2v_vectors_rf.py --test data/devign/devign.test.c2v.vectors --testjsonl ../astminer/dataset/test_lines_no_${project}.jsonl --no_unknown
+
         # save the vectors aside - to see if we encode them differently
         mv data/devign/devign.train.c2v.vectors data/devign/devign.train.c2v.vectors.$project.$i
-        mv data/devign/devign.val.c2v.vectors data/devign/devign.val.c2v.vectors.$project.$i
         mv data/devign/devign.test.c2v.vectors data/devign/devign.test.c2v.vectors.$project.$i
     done
 

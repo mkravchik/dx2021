@@ -42,10 +42,12 @@ class Config:
                             help="path to store logs into. if not given logs are not saved to file.")
         parser.add_argument('-tb', '--tensorboard', dest='use_tensorboard', action='store_true',
                             help='use tensorboard during training')
+        parser.add_argument('--subtokens', action='store_true', required=False,
+                            help="use subtoken evaluation (classic code2vec). if specified - classic code2vec, predicting the name consisting of tokens; if not - uses multiclass classification evaluation, used for code label prediction")
         return parser
 
     def set_defaults(self):
-        self.NUM_TRAIN_EPOCHS = 20
+        self.NUM_TRAIN_EPOCHS = 200
         self.SAVE_EVERY_EPOCHS = 1
         self.TRAIN_BATCH_SIZE = 768 #1024
         self.TEST_BATCH_SIZE = self.TRAIN_BATCH_SIZE
@@ -66,7 +68,7 @@ class Config:
 
         # model hyper-params
         self.MAX_CONTEXTS = 200
-        self.MAX_TOKEN_VOCAB_SIZE = 2000#1301136
+        self.MAX_TOKEN_VOCAB_SIZE = 2000 #2000#1301136
         self.MAX_TARGET_VOCAB_SIZE = 261245
         self.MAX_PATH_VOCAB_SIZE = 2000#911417
         self.DEFAULT_EMBEDDINGS_SIZE = 128
@@ -93,6 +95,8 @@ class Config:
         self.LOGS_PATH = args.logs_path
         self.DL_FRAMEWORK = 'tensorflow' if not args.dl_framework else args.dl_framework
         self.USE_TENSORBOARD = args.use_tensorboard
+        self.SUBTOKENS = args.subtokens
+
 
     def __init__(self, set_defaults: bool = False, load_from_args: bool = False, verify: bool = False):
         self.NUM_TRAIN_EPOCHS: int = 0
@@ -138,6 +142,7 @@ class Config:
         self.LOGS_PATH: Optional[str] = None
         self.DL_FRAMEWORK: str = ''  # in {'keras', 'tensorflow'}
         self.USE_TENSORBOARD: bool = False
+        self.SUBTOKENS: bool = False 
 
         # Automatically filled by `Code2VecModelBase._init_num_of_examples()`.
         self.NUM_TRAIN_EXAMPLES: int = 0
