@@ -7,6 +7,7 @@ import argparse
 from tqdm import tqdm
 from ClassMap.classMap import mapper
 import re
+import platform
 
 DEBUG = True
 
@@ -19,8 +20,15 @@ train_ratio = 0.8
 test_ratio = 0.1
 max_lines = 0
 
+this_os = platform.system().lower()
+if this_os == 'linux':
+    clang_path = "/usr/lib/llvm-10/lib/libclang.so.1"
+elif this_os == 'windows':
+    clang_path = "C:/Program Files (x86)/Microsoft Visual Studio/2019/Community/VC/Tools/Llvm/x64/bin/libclang.dll"
+else:
+    print("Unknown OS:", this_os, ". Don't know where clang is");
+    exit(1)
 
-clang_path = "C:/Program Files (x86)/Microsoft Visual Studio/2019/Community/VC/Tools/Llvm/x64/bin/libclang.dll"#"/usr/lib/llvm-10/lib/libclang.so.1"
 clang.cindex.Config.set_library_file(clang_path)
 # the API is best described at https://opensource.apple.com/source/lldb/lldb-112/llvm/tools/clang/bindings/python/clang/cindex.py.auto.html
 
@@ -165,7 +173,8 @@ def walkdir(folder):
 def parse_sources(location, out_file_path=combined_jsonl, max_lines=max_lines, class_map=None, set_map=False, dump_all=False):
     
     # delete the existing out file
-    os.remove(out_file_path)
+    if os.path.exists(out_file_path):
+        os.remove(out_file_path)
     
     # Precomputing files count
     files_count = 0
