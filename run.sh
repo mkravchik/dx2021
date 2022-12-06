@@ -1,7 +1,7 @@
 #!/bin/bash
 
-DATASET=../src #../sources
-DATASET2=../src #../sources
+DATASET=../sources
+DATASET2=../sources
 SNIPPET_SIZE=10
 
 LOOPS=1
