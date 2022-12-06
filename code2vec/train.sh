@@ -9,6 +9,31 @@
 # type=java14m
 # dataset_name=java14m
 
+NAMES=""
+# For subtoken training
+
+while getopts n flag
+do
+    case "${flag}" in
+        n) NAMES=1;;
+    esac
+done
+
+echo train NAMES $NAMES
+
+if [ "$NAMES" != "" ]; then
+    train_sh_arg=-n
+    c2v_arg=--subtokens
+    MAX_TOKEN_VOCAB_SIZE=100000
+    MAX_TARGET_VOCAB_SIZE=100000 
+    MAX_PATH_VOCAB_SIZE=100000 
+    echo "WARNING! Changing the vocab sizes! Remember to restore!"
+    sed -i -e "/self.MAX_TOKEN_VOCAB_SIZE =/ s/= .*/= ${MAX_TOKEN_VOCAB_SIZE}/" ./config.py
+    sed -i -e "/self.MAX_TARGET_VOCAB_SIZE =/ s/= .*/= ${MAX_TARGET_VOCAB_SIZE}/" ./config.py
+    sed -i -e "/self.MAX_PATH_VOCAB_SIZE =/ s/= .*/= ${MAX_PATH_VOCAB_SIZE}/" ./config.py
+fi
+
+
 type=devign
 dataset_name=devign
 data_dir=data/${dataset_name}
@@ -17,4 +42,4 @@ test_data=${data_dir}/${dataset_name}.val.c2v
 model_dir=models/${type}
 
 mkdir -p ${model_dir}
-python -u code2vec.py --data ${data} --test ${test_data} --save ${model_dir}/saved_model
+python -u code2vec.py --data ${data} --test ${test_data} --save ${model_dir}/saved_model ${c2v_arg}

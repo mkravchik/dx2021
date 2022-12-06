@@ -16,7 +16,7 @@ import java.nio.file.Paths
 
 // data class Sample (val project: String, val commit_id: String, val target: String, val func: String, val idx: String)
 // The lines are 1-based and the last line is included
-data class Sample (val project: String, val file: String, val start_line: Int, val end_line: Int, val func: String, val label: String)
+data class Sample (val project: String, val file: String, val start_line: Int, val end_line: Int, val func: String, val func_name: String?, val label: String?)
 data class SampleSnippet (val project: String, val file: String, val start_line: Int, val end_line: Int, val snippet: String, val label: String, val map_label: String)
 
 fun printPath(path: ASTPath){
@@ -59,13 +59,8 @@ fun code2vecCMethods(split: String, window: Int, step: Int, method_label: Boolea
         cnt += 1
         print("\r$cnt\t\t/$totalLines")
         val sample = Gson().fromJson(line, Sample::class.java)
-        var label = sample.project
-        // Disregard the warning "Condition 'sample.label != null' is always 'true'" - it is wrong,
-        // if label is missing it will be null and we want to use the project instead
-        @Suppress("SENSELESS_COMPARISON")
-        if (sample.label != null && sample.label != ""){
-            label = sample.label
-        }
+        // println("Sample: ${sample}")
+        var label = sample.label ?: sample.project
 
         val fileNode = FuzzyCppParser().parseInputStream(sample.func.byteInputStream(StandardCharsets.UTF_8)) ?: return@forEachLine
         val labelExtractor = MethodNameExtractor()
@@ -79,8 +74,15 @@ fun code2vecCMethods(split: String, window: Int, step: Int, method_label: Boolea
                 // println("\nmethod label is ${label}")
             }
             else {
-                println("\nCan't extract method from ${sample.func}, skipping")
-                return@forEachLine
+                println("\nCan't extract method from ${sample.func}")
+                if (sample.func_name != null && sample.func_name != ""){
+                    label = separateToken(sample.func_name)
+                    println("\nUsing ${sample.func_name} - ${label}")
+                }
+                else{
+                    println(" skipping")
+                    return@forEachLine
+                }
             }
         }
         // println("label $label")
@@ -100,11 +102,12 @@ fun code2vecCMethods(split: String, window: Int, step: Int, method_label: Boolea
         // println("There are $fileLines lines in this function")
 
         val winStep = if (window == 0) fileLines else step
-        for (startLine: Int in 1..fileLines - window step winStep) {
-            val endLine = if (window != 0) startLine.toInt() + window else fileLines
-            val miner = PathMiner(PathRetrievalSettings(8, 3, startLine.toInt(), endLine))
+        var startLine: Int = 1
+        while (startLine < fileLines){
+            val endLine = if (window != 0 && startLine + window <= fileLines) startLine + window else fileLines
+            val miner = PathMiner(PathRetrievalSettings(8, 3, startLine, endLine))
             val paths = miner.retrievePaths(fileNode)
-
+            // println("startLine ${startLine} endLine ${endLine} fileLines ${fileLines}")
             // println(paths.size.toString() + " paths between $startLine - $endLine: ")
 //            paths.forEach{
 //                //println("The path is $it")
@@ -119,12 +122,14 @@ fun code2vecCMethods(split: String, window: Int, step: Int, method_label: Boolea
                         paths.map { toPathContext(it) { node -> node.getNormalizedToken() } })
                 )
                 val code_snip = lines.sliceArray(startLine - 1 until endLine)
-                val snip = SampleSnippet(project = sample.project, file = sample.file, start_line = sample.start_line + startLine.toInt() - 1,
-                    end_line = sample.start_line + endLine - 1, snippet = code_snip.joinToString(separator = "\n "), label = label, map_label=sample.label)
+                val snip = SampleSnippet(project = sample.project, file = sample.file, start_line = sample.start_line + startLine - 1,
+                    end_line = sample.start_line + endLine - 1, snippet = code_snip.joinToString(separator = "\n "),
+                     label = label, map_label= sample.label ?: sample.project)
 
                 gson.toJson(snip, writer);
                 writer.newLine();
             }
+            startLine += winStep
         }
         System.gc()
     }
