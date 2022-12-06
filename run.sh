@@ -15,7 +15,7 @@ do
     esac
 done
 
-# UNCOMMENT the part s you want to run!
+# UNCOMMENT the parts you want to run!
 
 ###############################   CPP -> JSONL ############################################################
 # # If you don't want to re-parse the sourses add -np
