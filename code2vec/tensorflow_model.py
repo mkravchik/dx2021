@@ -659,9 +659,12 @@ class MulticlassEvaluationMetric:
 
     def report(self):
         labels = sorted(self.class_metrics.keys())
-        self.logger.log("\n" + ",".join(labels) + "\nPredicted (cols), Actual (rows)\n" + str(confusion_matrix(self.y_true, self.y_pred, labels=labels)))
-        self.logger.log("\n" + classification_report(self.y_true, self.y_pred, zero_division=0, labels=labels))
-        self.write_test_res2file()
+        if len(labels) == 0:
+            self.logger.log("length of labels is 0")
+        else:
+            self.logger.log("\n" + ",".join(labels) + "\nPredicted (cols), Actual (rows)\n" + str(confusion_matrix(self.y_true, self.y_pred, labels=labels)))
+            self.logger.log("\n" + classification_report(self.y_true, self.y_pred, zero_division=0, labels=labels))
+            self.write_test_res2file()
 
     def update_batch(self, results):
         for original_name, top_words in results:
