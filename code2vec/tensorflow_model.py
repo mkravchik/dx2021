@@ -197,13 +197,18 @@ class Code2VecModel(Code2VecModelBase):
             total_predictions = 0
             total_prediction_batches = 0
             total_loss = 0
-            evaluation_metric = MulticlassEvaluationMetric(#SubtokensEvaluationMetric(
-                partial(common.filter_impossible_names, self.vocabs.target_vocab.special_words),
-                self)
-            # topk_accuracy_evaluation_metric = TopKAccuracyEvaluationMetric(
-            #     self.config.TOP_K_WORDS_CONSIDERED_DURING_PREDICTION,
-            #     partial(common.get_first_match_word_from_top_predictions, self.vocabs.target_vocab.special_words))
-            # print(topk_accuracy_evaluation_metric.top_k)
+            if self.config.SUBTOKENS:
+                subtokens_evaluation_metric = SubtokensEvaluationMetric(
+                    partial(common.filter_impossible_names, self.vocabs.target_vocab.special_words))
+                topk_accuracy_evaluation_metric = TopKAccuracyEvaluationMetric(
+                    self.config.TOP_K_WORDS_CONSIDERED_DURING_PREDICTION,
+                    partial(common.get_first_match_word_from_top_predictions, self.vocabs.target_vocab.special_words))
+                print(topk_accuracy_evaluation_metric.top_k)
+            else:
+                evaluation_metric = MulticlassEvaluationMetric(#SubtokensEvaluationMetric(
+                    partial(common.filter_impossible_names, self.vocabs.target_vocab.special_words),
+                    self)
+            
             start_time = time.time()
 
             self.sess.run(self.eval_input_iterator_reset_op)
@@ -227,8 +232,12 @@ class Code2VecModel(Code2VecModelBase):
                     original_names = common.binary_to_string_list(original_names)  # (batch,)
 
                     self._log_predictions_during_evaluation(zip(original_names, top_words, top_scores), log_output_file)
-                    # topk_accuracy_evaluation_metric.update_batch(zip(original_names, top_words))
-                    evaluation_metric.update_batch(zip(original_names, top_words))
+
+                    if self.config.SUBTOKENS:
+                        topk_accuracy_evaluation_metric.update_batch(zip(original_names, top_words))
+                        subtokens_evaluation_metric.update_batch(zip(original_names, top_words))
+                    else:
+                        evaluation_metric.update_batch(zip(original_names, top_words))
 
                     total_predictions += len(original_names)
                     total_prediction_batches += 1
@@ -249,24 +258,40 @@ class Code2VecModel(Code2VecModelBase):
         
         elapsed = int(time.time() - eval_start_time)
         self.log("Evaluation time: %sH:%sM:%sS" % ((elapsed // 60 // 60), (elapsed // 60) % 60, elapsed % 60))
-        
-        evaluation_metric.report()
 
-        return ModelEvaluationResults(
-            # topk_acc=topk_accuracy_evaluation_metric.topk_correct_predictions,
-            subtoken_precision=evaluation_metric.precision,
-            subtoken_recall=evaluation_metric.recall,
-            subtoken_f1=evaluation_metric.f1,
-            subtoken_accuracy=evaluation_metric.accuracy,
-            subtoken_error_rate=evaluation_metric.error_rate,
-            subtoken_true_positives=evaluation_metric.nr_true_positives,
-            subtoken_true_negatives=evaluation_metric.nr_true_negatives,
-            subtoken_false_positives=evaluation_metric.nr_false_positives,
-            subtoken_false_negatives=evaluation_metric.nr_false_negatives,
-            subtoken_tnr=evaluation_metric.true_negatives_rate,
-            subtoken_fpr=evaluation_metric.false_positives_rate, 
-            loss=total_loss/float(total_prediction_batches)
-            )
+        if self.config.SUBTOKENS:
+            return ModelEvaluationResults(
+                topk_acc=topk_accuracy_evaluation_metric.topk_correct_predictions,
+                subtoken_precision=subtokens_evaluation_metric.precision,
+                subtoken_recall=subtokens_evaluation_metric.recall,
+                subtoken_f1=subtokens_evaluation_metric.f1,
+                subtoken_accuracy=subtokens_evaluation_metric.accuracy,
+                subtoken_error_rate=subtokens_evaluation_metric.error_rate,
+                subtoken_true_positives=subtokens_evaluation_metric.nr_true_positives,
+                subtoken_true_negatives=subtokens_evaluation_metric.nr_true_negatives,
+                subtoken_false_positives=subtokens_evaluation_metric.nr_false_positives,
+                subtoken_false_negatives=subtokens_evaluation_metric.nr_false_negatives,
+                subtoken_tnr=subtokens_evaluation_metric.true_negatives_rate,
+                subtoken_fpr=subtokens_evaluation_metric.false_positives_rate,
+                loss=total_loss/float(total_prediction_batches)
+                )
+        else:
+            evaluation_metric.report()
+            return ModelEvaluationResults(
+                topk_acc=0,
+                subtoken_precision=evaluation_metric.precision,
+                subtoken_recall=evaluation_metric.recall,
+                subtoken_f1=evaluation_metric.f1,
+                subtoken_accuracy=evaluation_metric.accuracy,
+                subtoken_error_rate=evaluation_metric.error_rate,
+                subtoken_true_positives=evaluation_metric.nr_true_positives,
+                subtoken_true_negatives=evaluation_metric.nr_true_negatives,
+                subtoken_false_positives=evaluation_metric.nr_false_positives,
+                subtoken_false_negatives=evaluation_metric.nr_false_negatives,
+                subtoken_tnr=evaluation_metric.true_negatives_rate,
+                subtoken_fpr=evaluation_metric.false_positives_rate, 
+                loss=total_loss/float(total_prediction_batches)
+                )
 
     def _build_tf_training_graph(self, input_tensors):
         # Use `_TFTrainModelInputTensorsFormer` to access input tensors by name.
@@ -515,9 +540,10 @@ class Code2VecModel(Code2VecModelBase):
                     output_file.write('Original: ' + original_name + \
                         ' Predicted:' + top_predicted_words[0] + ' ' \
                             + str(top_scores[0]) + '\t\t\t predicted correctly at rank: ' \
-                                + str(prediction_idx + 1) + ' ' + str(top_scores[prediction_idx + 1]) + '\n')
+                                + str(prediction_idx + 1) + ' ' + str(top_scores[prediction_idx ]) + '\n')
             else:
-                output_file.write('No results for predicting: ' + original_name)
+                output_file.write('No precise prediction for: ' + original_name + ' Predicted:' + top_predicted_words[0] + ' ' \
+                            + str(top_scores[0]) + '\n')
 
     def _trace_training(self, sum_loss, batch_num, multi_batch_start_time):
         multi_batch_elapsed = time.time() - multi_batch_start_time
