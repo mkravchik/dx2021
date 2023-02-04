@@ -43,16 +43,7 @@ class C2VBoost:
     def predict(self, data):
 
         labels = get_prediction_output("valid")[0]
-        X = np.array(
-            self.feature_extractor.to_vec_no_label(preprocess_data(data["func"]), data["syntactic_features"])).reshape(
-            1, -1)
-        if self.model is not None:
-            probs = self.model.predict_proba(X)[0]
-            if max(probs) < 0.6:
-                return -1
-            return self.model.predict(X)
-        else:
-            raise Exception("Model not Fitted")
+        return labels
 
 
 if __name__ == "__main__":
