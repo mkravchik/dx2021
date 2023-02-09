@@ -3,13 +3,14 @@ import clang
 import clang.cindex
 import json
 import os
+import shutil
 import argparse
 from tqdm import tqdm
 from ClassMap.classMap import mapper
 import re
 import platform
 
-DEBUG = True
+DEBUG = False
 
 combined_jsonl = "all.jsonl"
 train_jsonl = "train.jsonl"
@@ -365,6 +366,117 @@ def split_dataset(combined_jsonl_path, train_ratio, test_ratio, use_defined_set=
     end = l_idx
     _write_splits()
 
+def find_function(file_path, start_line, end_line, include_dirs = None, defines = []):
+    # print("dump_functions", file_path, project)
+    # necessary to deal with the symlinks
+    file_path = os.path.realpath(file_path)
+
+    # some libraries put lots of code under if defined - include this code
+    args = []
+    for define in defines:
+        args.extend(["-D", define])
+    expected_defines = set(get_ifdefs(file_path))
+    for define in expected_defines:
+        args.extend(["-D", define])
+
+    # print(args)
+
+    if include_dirs is not None:
+        for inc in include_dirs:
+            args.extend(["-I", inc])
+
+    # print(args)
+
+    index = clang.cindex.Index.create()
+    try:
+        tu = index.parse(file_path, args=args,
+         options=clang.cindex.TranslationUnit.PARSE_DETAILED_PROCESSING_RECORD)
+        if DEBUG and len(tu.diagnostics):
+            print(list(tu.diagnostics)) 
+    except Exception as e:
+        print(f"Failed parsing {file_path}, error {e}")
+        return "", 0, 0
+
+    defns = method_definitions(tu.cursor)
+
+    with open(file_path, encoding = "ISO-8859-1") as src:
+        lines = src.readlines()
+
+    file_name = file_path.split(os.sep)[-1]
+
+    for function_node in defns:
+        # print("DEF: ", function_node.location.file, function_node.displayname)
+        if function_node.location.file.name != file_path:
+            continue
+        if function_node.extent.start.line <= start_line and function_node.extent.end.line>= end_line:
+            if DEBUG:
+                print(f"Found: {function_node.displayname}")
+            func_lines = lines[function_node.extent.start.line - 1 : function_node.extent.end.line]
+            body = "".join(func_lines)
+            return body, start_line - function_node.extent.start.line + 1, end_line - function_node.extent.start.line + 1
+        elif (function_node.extent.start.line >= start_line and \
+              function_node.extent.end.line >= end_line and\
+                function_node.extent.start.line <= end_line ) or \
+            (function_node.extent.start.line <= start_line and \
+             function_node.extent.end.line <= end_line and \
+                function_node.extent.end.line >= start_line ):
+            print(f"Snippet spreads beyond a function. {start_line}, {end_line},\
+                   {file_path}, {function_node.displayname}, {function_node.extent.start.line} - {function_node.extent.end.line}")
+            
+    return "", 0, 0
+
+"""
+Adds a full function body to each jsonl line base on the file_name, start_line, end_line. 
+The file name should be relative to the *location* argument
+You can use something like sed 's/C:\\\\Users\\\\Or\\\\Desktop\\\\Fatal-Library\\\\sources\\\\//g' -i <JSONL_PATH> to get the path right
+"""
+def add_function_body(location, combined_jsonl_path, class_map):
+    class_mapper = mapper(class_map, location)
+
+    # Open the input jsonl
+    # Open a tmp output (?)
+    tmp_name = combined_jsonl_path + ".tmp"
+    updated_jsonl = open(tmp_name, "wt")
+    # For each line
+    # Find the source file
+    # Parse it
+    # Find the relevant function
+    # Write the updated line, from, to
+    with open(combined_jsonl_path) as src:
+        for line in src:
+            if len(line):
+                func = json.loads(line)
+                if 'full_func' in func:
+                    print("The file already contains full function body, skipping")
+                    return
+
+                if '\\' in func["file_path"] and '\\' != os.sep:
+                    func["file_path"] = os.sep.join(func["file_path"].split('\\'))
+                norm_file_path = os.path.abspath(location + os.sep + func["file_path"])
+                if os.path.exists(norm_file_path):
+                    if DEBUG:
+                        print(f'Looking for a function owning a snippet between {func["start_line"]} and {func["end_line"]} in {norm_file_path}')
+
+                    if class_mapper is not None:
+                        # add only mapped files
+                        label, inc_dirs, project, defines = class_mapper.getFileClass(norm_file_path)
+                        full_func, begin, end = find_function(norm_file_path, func["start_line"], func["end_line"], inc_dirs, defines)
+                        if len(full_func):
+                            func["full_func"] = full_func
+                            func["begin"] = begin
+                            func["end"] = end
+
+                            json_s = json.dumps(func)
+
+                            updated_jsonl.write(json_s)
+                            updated_jsonl.write("\n")
+                else:
+                    print(f"{norm_file_path} not found")
+
+    updated_jsonl.close()
+    shutil.move(tmp_name, combined_jsonl_path)
+    pass
+
 # dump_functions(
 #     #"/mnt/d/GitHub_Clones/scripts/C_Dataset/test/check_datasets/UI/7zip/GUI/BenchmarkDialog.cpp",
 #     #"/mnt/d/GitHub_Clones/scripts/C_Dataset/test/check_datasets/Net/poco/Net/src/HTTPHeaderStream.cpp",
@@ -391,8 +503,11 @@ if __name__ == '__main__':
     parser.add_argument("-ln", "--line_nums", help="Create files with the selected lines numbers for each set.", action='store_true')
     parser.add_argument("-da", "--dump_all", help="Dump all functions, not just the mapped ones.", action='store_true')
     parser.add_argument("-lbl", "--label", help="Label tag, used for equal splitting", default='label')
+    parser.add_argument("-af", "--add_function", help="Adds full function body. The input file must have file_path, start_line, end_line specified. The result file overwrites the original.", default='label', action='store_true')
     args = parser.parse_args()
     print(args)
+    if args.add_function:
+        add_function_body(args.location, args.jsonl_location, args.class_map)
     if not args.no_parse:
         parse_sources(args.location, args.jsonl_location, args.max_lines, args.class_map, args.set_map, args.dump_all)
     if args.split:

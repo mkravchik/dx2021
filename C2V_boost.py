@@ -1,12 +1,6 @@
 import os
-
-cur_dir = (os.path.abspath(os.curdir))
-os.chdir("..")
 import subprocess
-from sklearn.ensemble import RandomForestClassifier
-from code2vec.prediction_outputter import get_prediction_output
-from feature_analysis import Doc2vec
-import pickle
+# from code2vec.prediction_outputter import get_prediction_output
 import numpy as np
 from ClassMap import classMap
 from typing import *
@@ -15,39 +9,26 @@ import json
 mapper = classMap.mapper()
 classes = mapper.getClasses()
 
-os.chdir(cur_dir)
-
-
 class C2VBoost:
     def __init__(self):
-
-        cur_dir = (os.path.abspath(os.curdir))
-        os.chdir("..")
-        pf = open("d2v.pickle", "rb")
-        os.chdir(cur_dir)
-
-        d2v: Doc2vec = pickle.load(pf)
-        pf.close()
-        self.feature_extractor = d2v
-        self.text_preprocessor = preprocess_data
         self.classes = classes
 
     def fit(self, data):
-        print(subprocess.run(
-            "python ./cpp2jsonl.py -l ../sources -m ./ClassMap/classMap.json -jl " + data + " -sm -np -s",
-            shell=True))
-        print(subprocess.run("extract_data.sh", shell=True))
-        print(subprocess.run(".code2vec/train.sh", shell=True))
+        # Splitting into train and validation (20%). No test.
+        # print(subprocess.run(
+        #     "python ./cpp2jsonl.py -l ../sources -m ./ClassMap/classMap.json -jl " + data + " -np -s -test 0 -af", shell=True))
+        print(subprocess.run("./extract_data.sh", shell=True))
+        # print(subprocess.run("./code2vec/train.sh", shell=True))
 
 
     def predict(self, data):
-
-        labels = get_prediction_output("valid")[0]
+        # The get_prediction_output must be refactored to be run like that.
+        # In its current form, it can't be even imported, it is supposed to be run and reads its arguments from the command line
+        # labels = get_prediction_output("valid")[0]
         return labels
 
 
 if __name__ == "__main__":
     clf = C2VBoost()
-    clf.predict('refined_dataset.jsonl')
-    # Train the model
-    #clf.fit('refined_dataset.jsonl')
+    clf.fit('refined_dataset.jsonl')
+    # clf.predict('refined_dataset.jsonl')

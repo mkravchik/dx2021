@@ -17,6 +17,9 @@ import java.nio.file.Paths
 // data class Sample (val project: String, val commit_id: String, val target: String, val func: String, val idx: String)
 // The lines are 1-based and the last line is included
 data class Sample (val project: String, val file: String, val start_line: Int, val end_line: Int, val func: String, val func_name: String?, val label: String?)
+data class SampleWithFullFunc (val project: String, val file: String,
+ val start_line: Int, val end_line: Int, val func: String, val func_name: String?,
+  val label: String?, val file_path: String?, val full_func: String?, val begin: Int?, val end: Int)
 data class SampleSnippet (val project: String, val file: String, val start_line: Int, val end_line: Int, val snippet: String, val label: String, val map_label: String)
 
 fun printPath(path: ASTPath){
@@ -58,11 +61,13 @@ fun code2vecCMethods(split: String, window: Int, step: Int, method_label: Boolea
     File(source).forEachLine { line ->
         cnt += 1
         print("\r$cnt\t\t/$totalLines")
-        val sample = Gson().fromJson(line, Sample::class.java)
+        // val sample = Gson().fromJson(line, Sample::class.java)
+        val sample = Gson().fromJson(line, SampleWithFullFunc::class.java)
         // println("Sample: ${sample}")
         var label = sample.label ?: sample.project
+        val func_body = sample.full_func ?: sample.func
 
-        val fileNode = FuzzyCppParser().parseInputStream(sample.func.byteInputStream(StandardCharsets.UTF_8)) ?: return@forEachLine
+        val fileNode = FuzzyCppParser().parseInputStream(func_body.byteInputStream(StandardCharsets.UTF_8)) ?: return@forEachLine
         val labelExtractor = MethodNameExtractor()
         var dummyParseResult = ParseResult(fileNode, sample.file)
         normalizeParseResult(dummyParseResult, splitTokens = true)
@@ -74,7 +79,7 @@ fun code2vecCMethods(split: String, window: Int, step: Int, method_label: Boolea
                 // println("\nmethod label is ${label}")
             }
             else {
-                println("\nCan't extract method from ${sample.func}")
+                println("\nCan't extract method from ${func_body}")
                 if (sample.func_name != null && sample.func_name != ""){
                     label = separateToken(sample.func_name)
                     println("\nUsing ${sample.func_name} - ${label}")
@@ -95,7 +100,7 @@ fun code2vecCMethods(split: String, window: Int, step: Int, method_label: Boolea
         }
 
         // I want to calculate a number of sliding windows over the function
-        val reader = sample.func.byteInputStream(StandardCharsets.UTF_8).bufferedReader()
+        val reader = func_body.byteInputStream(StandardCharsets.UTF_8).bufferedReader()
         val lines = reader.lines().toArray()
 
         val fileLines = lines.count().toInt();
@@ -103,12 +108,20 @@ fun code2vecCMethods(split: String, window: Int, step: Int, method_label: Boolea
 
         val winStep = if (window == 0) fileLines else step
         var startLine: Int = 1
+        if (sample.begin != null){
+            startLine = sample.begin
+        }
+
         while (startLine < fileLines){
-            val endLine = if (window != 0 && startLine + window <= fileLines) startLine + window else fileLines
+            var endLine = if (window != 0 && startLine + window <= fileLines) startLine + window else fileLines
+            if (sample.end != null) {
+                endLine = sample.end
+            }
+
             val miner = PathMiner(PathRetrievalSettings(8, 3, startLine, endLine))
             val paths = miner.retrievePaths(fileNode)
             // println("startLine ${startLine} endLine ${endLine} fileLines ${fileLines}")
-            // println(paths.size.toString() + " paths between $startLine - $endLine: ")
+            println("\n" + paths.size.toString() + " paths between $startLine - $endLine: ")
 //            paths.forEach{
 //                //println("The path is $it")
 //                printPath(it)
@@ -129,6 +142,10 @@ fun code2vecCMethods(split: String, window: Int, step: Int, method_label: Boolea
                 gson.toJson(snip, writer);
                 writer.newLine();
             }
+            if (sample.full_func != null){
+                break // there is a simple sample
+            }
+
             startLine += winStep
         }
         System.gc()
