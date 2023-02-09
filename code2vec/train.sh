@@ -22,7 +22,6 @@ done
 echo train NAMES $NAMES
 
 if [ "$NAMES" != "" ]; then
-    train_sh_arg=-n
     c2v_arg=--subtokens
     MAX_TOKEN_VOCAB_SIZE=100000
     MAX_TARGET_VOCAB_SIZE=100000 

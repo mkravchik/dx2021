@@ -48,16 +48,27 @@ class DotAstStorage(override val directoryPath: String) : AstStorage {
         descriptionFileStream.close()
     }
 
+    fun node_name(nodesMap: RankedIncrementalIdStorage<Node>, node: Node) : String {
+        if (node.getTypeLabel() == "NAME" || node.getTypeLabel() == "TYPE_FULL_NAME"){
+            return "\"" + (nodesMap.record(node) - 1).toString() + "_" + node.getToken() + "\""
+        }
+        else {
+            return "\"" + (nodesMap.record(node) - 1).toString() + "_" + node.getTypeLabel() + "\""
+        }
+
+    }
+
     private fun dumpAst(root: Node, file: File, astName: String) : RankedIncrementalIdStorage<Node> {
         val nodesMap = RankedIncrementalIdStorage<Node>()
         // dot parsers (e.g. pydot) can't parse graph/digraph if its name is "graph"
         val fixedAstName = if (astName == "graph" || astName == "digraph") "_$astName" else astName
 
         file.printWriter().use { out ->
-            out.println("digraph $fixedAstName {")
+            out.println("graph $fixedAstName {") //dot fails to parse digraph with --
             for (node in root.preOrder()) {
-                val rootId = nodesMap.record(node) - 1
-                val childrenIds = node.getChildren().map { nodesMap.record(it) - 1 }
+                val rootId = node_name(nodesMap, node)// nodesMap.record(node) - 1
+                // val childrenIds = node.getChildren().map { nodesMap.record(it) - 1 }
+                val childrenIds = node.getChildren().map { node_name(nodesMap, it)}
                 out.println(
                         "$rootId -- {${childrenIds.joinToString(" ") { it.toString() }}};"
                 )

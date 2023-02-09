@@ -207,12 +207,16 @@ def parse_sources(location, out_file_path=combined_jsonl, max_lines=max_lines, c
                  max_lines, label=label, include_dirs=inc_dirs, dest_set=dest_set, defines=defines)
 
 
-def split_labeled_dataset(combined_jsonl_path, val_ratio, label):
+def split_labeled_dataset(combined_jsonl_path, val_ratio, label, class_map=None):
     """
     This function opens the combined file and writes each line into its designated set
     If no validation lines were found, the train set is split into train and validation
     according to the given ratio
     """
+    print("split_labeled_dataset", locals())
+    class_mapper = None
+    if class_map is not None:
+        class_mapper = mapper(class_map)
 
     # to save memory, first read though the file looking for the validation set
     validation_present = False
@@ -221,6 +225,9 @@ def split_labeled_dataset(combined_jsonl_path, val_ratio, label):
             if len(line):
                 func = json.loads(line)
                 dest_set = func.get('set', None)
+                if dest_set is None: # can happen in _lines files
+                    if class_mapper:
+                        dest_set = class_mapper.getProjectSet(func.get('project', None))
                 if dest_set == 'validation':
                     validation_present = True
                     print("Validation set found")
@@ -238,6 +245,10 @@ def split_labeled_dataset(combined_jsonl_path, val_ratio, label):
                     if len(line):
                         func = json.loads(line)
                         dest_set = func.get('set', None)
+                        if dest_set is None: # can happen in _lines files
+                            if class_mapper:
+                                dest_set = class_mapper.getProjectSet(func.get('project', None))
+
                         if dest_set is not None:
                             clean_line = json.dumps(func)+"\n"
                             if dest_set == 'train':
@@ -301,14 +312,14 @@ def split_labeled_dataset(combined_jsonl_path, val_ratio, label):
 
     _write_splits()
 
-def split_dataset(combined_jsonl_path, train_ratio, test_ratio, use_defined_set=False, write_lines=False, label='label'):
+def split_dataset(combined_jsonl_path, train_ratio, test_ratio, use_defined_set=False, write_lines=False, label='label', class_map=None):
     # we need to read the lines counting them for each project, then split
     # assumptions:
     # 1. Continuity of the projects in the combined file
     # 2. The entire combined files fit into memory
 
     if use_defined_set:
-        split_labeled_dataset(combined_jsonl_path, 1.0 - (train_ratio + test_ratio), label)
+        split_labeled_dataset(combined_jsonl_path, 1.0 - (train_ratio + test_ratio), label, class_map)
         return
 
     with open(combined_jsonl_path) as src:
@@ -396,7 +407,7 @@ if __name__ == '__main__':
     if not args.no_parse:
         parse_sources(args.location, args.jsonl_location, args.max_lines, args.class_map, args.set_map, args.dump_all)
     if args.split:
-        split_dataset(args.jsonl_location, args.train_ratio, args.test_ratio, args.set_map, args.line_nums, args.label)
+        split_dataset(args.jsonl_location, args.train_ratio, args.test_ratio, args.set_map, args.line_nums, args.label, args.class_map)
 
 # dump_functions("/mnt/d/GitHub_Clones/scripts/C_Dataset/vlc/src/test/shared_data_ptr.cpp"
 #     # sys.argv[1]

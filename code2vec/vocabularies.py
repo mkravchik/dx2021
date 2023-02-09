@@ -102,6 +102,7 @@ class Vocab:
         if special_words is None:
             special_words = Namespace()
         words_sorted_by_counts = sorted(word_to_count, key=word_to_count.get, reverse=True)
+        # print(dict(sorted(word_to_count.items(), key=lambda item: item[1], reverse=True)))
         words_sorted_by_counts_and_limited = words_sorted_by_counts[:max_size]
         return cls(vocab_type, words_sorted_by_counts_and_limited, special_words)
 
@@ -188,6 +189,8 @@ class Code2VecVocabs:
     def _create_from_word_freq_dict(self):
         word_freq_dict = self._load_word_freq_dict()
         self.config.log('Word frequencies dictionaries loaded. Now creating vocabularies.')
+        # self.config.log(word_freq_dict.token_to_count)
+
         self.token_vocab = Vocab.create_from_freq_dict(
             VocabType.Token, word_freq_dict.token_to_count, self.config.MAX_TOKEN_VOCAB_SIZE,
             special_words=self._get_special_words_by_vocab_type(VocabType.Token))

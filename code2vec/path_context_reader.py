@@ -182,6 +182,7 @@ class PathContextReader:
         return self.model_input_tensors_former.to_model_input_form(tensors)
 
     def _map_raw_dataset_row_to_input_tensors(self, *row_parts) -> ReaderInputTensors:
+        # TODO - change here to have path_source_token_strings and path_target_token_indices 3 parts each
         row_parts = list(row_parts)
         target_str = row_parts[0]
         target_index = self.vocabs.target_vocab.lookup_index(target_str)

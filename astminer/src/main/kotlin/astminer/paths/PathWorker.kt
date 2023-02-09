@@ -95,10 +95,10 @@ class PathWorker {
         val paths: MutableList<ASTPath> = ArrayList()
         // println("retrievePaths, node $tree")
         iterator.forEach { currentNode ->
-            //println("retrievePaths, currentNode $currentNode (${currentNode.getToken()})")
+            // println("retrievePaths, currentNode ${currentNode.getTypeLabel()}  ${currentNode.getToken()}")
             if (!inRange(currentNode, minLine, maxLine))
                 return@forEach
-
+            // println("retrievePaths, currentNode ${currentNode.getTypeLabel()}  ${currentNode.getToken()}")
             if (currentNode.isLeaf()) {
                 if (currentNode.getToken().isNotEmpty()) {
                     currentNode.setPathPieces(listOf(listOf(currentNode)))
@@ -129,17 +129,16 @@ class PathWorker {
 
                 val currentNodePaths = collapsePiecesToPaths(currentNode, pathPiecesPerChild, maxLength, maxWidth, minLine, maxLine)
 
-//                println("retrievePaths, currentNodePaths $currentNodePaths")
-//                currentNodePaths.forEach{
-//                    print("upward: ")
-//                    it.upwardNodes.forEach{print(it.getToken() + ",")}
-//                    println("")
-//                    print("top: ${it.topNode.getToken()}")
-//                    println("")
-//                    print("downward: ")
-//                    it.downwardNodes.forEach{print(it.getToken() + ",")}
-//                    println("")
-//                }
+                // currentNodePaths.forEach{
+                //     print("upward: ")
+                //     it.upwardNodes.forEach{print(it.getTypeLabel() + " " + it.getToken() + ",")}
+                //     println("")
+                //     print("top: ${it.topNode.getTypeLabel()} ${it.topNode.getToken()}")
+                //     println("")
+                //     print("downward: ")
+                //     it.downwardNodes.forEach{print(it.getTypeLabel() + " " + it.getToken() + ",")}
+                //     println("")
+                // }
                 paths.addAll(currentNodePaths)
                 currentNode.setPathPieces(currentNodePathPieces)
             }

@@ -334,6 +334,7 @@ class Code2VecModel(Code2VecModelBase):
 
     def _calculate_weighted_contexts(self, tokens_vocab, paths_vocab, attention_param, source_input, path_input,
                                      target_input, valid_mask, is_evaluating=False):
+        # TODO - change here to 3 embeddings per source and 3 embeddings per target
         source_word_embed = tf.nn.embedding_lookup(params=tokens_vocab, ids=source_input)  # (batch, max_contexts, dim)
         path_embed = tf.nn.embedding_lookup(params=paths_vocab, ids=path_input)  # (batch, max_contexts, dim)
         target_word_embed = tf.nn.embedding_lookup(params=tokens_vocab, ids=target_input)  # (batch, max_contexts, dim)

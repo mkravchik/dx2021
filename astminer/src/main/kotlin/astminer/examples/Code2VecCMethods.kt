@@ -13,6 +13,7 @@ import java.io.*
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.Paths
+import astminer.ast.DotAstStorage
 
 // data class Sample (val project: String, val commit_id: String, val target: String, val func: String, val idx: String)
 // The lines are 1-based and the last line is included
@@ -93,6 +94,11 @@ fun code2vecCMethods(split: String, window: Int, step: Int, method_label: Boolea
             // it.prettyPrint(withChildren=false)
             it.setNormalizedToken(separateToken(it.getToken())) 
         }
+
+        // Dump Function AST
+        // val dotStorage = DotAstStorage(outputDir)
+        // dotStorage.store(fileNode, label) 
+        // dotStorage.close()
 
         // I want to calculate a number of sliding windows over the function
         val reader = sample.func.byteInputStream(StandardCharsets.UTF_8).bufferedReader()

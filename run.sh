@@ -1,7 +1,7 @@
 #!/bin/bash
 
-DATASET=../sources
-DATASET2=../sources
+DATASET=../src/ #../sources
+DATASET2=..src/ #../sources
 SNIPPET_SIZE=10
 
 LOOPS=1
@@ -36,16 +36,16 @@ STEP_SIZE=5
 for SNIPPET_SIZE in 10 
 do  
     echo Running on code snippets of $SNIPPET_SIZE lines
-    cd astminer
-    for split in train valid test
-    do
-        ./cli.sh ${split} $SNIPPET_SIZE $STEP_SIZE ${NAMES}
-        cp ../code2vec/devign.${split}.raw.txt ../code2vec/devign.${split}.raw_backup.txt
-        cp dataset/${split}.jsonl dataset/${split}_backup.jsonl
-        cp dataset/${split}_lines.jsonl dataset/${split}_lines_backup.jsonl
-    done
-    cd ..
-    ./run_cross.sh "$@"
+    # cd astminer
+    # for split in train valid test
+    # do
+    #     ./cli.sh ${split} $SNIPPET_SIZE $STEP_SIZE ${NAMES}
+    #     cp ../code2vec/devign.${split}.raw.txt ../code2vec/devign.${split}.raw_backup.txt
+    #     cp dataset/${split}.jsonl dataset/${split}_backup.jsonl
+    #     cp dataset/${split}_lines.jsonl dataset/${split}_lines_backup.jsonl
+    # done
+    # cd ..
+#    ./run_cross.sh "$@"
 done
 
 
@@ -74,6 +74,7 @@ do
     python3 code2vec.py --load models/devign/saved_model.release --test data/devign/devign.val.c2v --export_code_vectors ${c2v_arg}
     python3 code2vec.py --load models/devign/saved_model.release --test data/devign/devign.test.c2v --export_code_vectors ${c2v_arg}
     python3 ../c2v_vectors_rf.py --train data/devign/devign.train.c2v.vectors --trainjsonl ../astminer/dataset/train_lines.jsonl --test data/devign/devign.val.c2v.vectors --testjsonl ../astminer/dataset/valid_lines.jsonl    
+    python3 ../c2v_vectors_rf.py --train data/devign/devign.train.c2v.vectors --trainjsonl ../astminer/dataset/train_lines.jsonl --test data/devign/devign.test.c2v.vectors --testjsonl ../astminer/dataset/test_lines.jsonl    
 
     # # save the vectors aside - to see if we encode them differently
     # mv data/devign/devign.train.c2v.vectors data/devign/devign.train.c2v.vectors.$i
