@@ -19,7 +19,7 @@ import java.nio.file.Paths
 data class Sample (val project: String, val file: String, val start_line: Int, val end_line: Int, val func: String, val func_name: String?, val label: String?)
 data class SampleWithFullFunc (val project: String, val file: String,
  val start_line: Int, val end_line: Int, val func: String, val func_name: String?,
-  val label: String?, val file_path: String?, val full_func: String?, val begin: Int?, val end: Int)
+  val label: String?, val file_path: String?, val full_func: String?, val begin: Int?, val end: Int?)
 data class SampleSnippet (val project: String, val file: String, val start_line: Int, val end_line: Int, val snippet: String, val label: String, val map_label: String)
 
 fun printPath(path: ASTPath){
@@ -121,7 +121,7 @@ fun code2vecCMethods(split: String, window: Int, step: Int, method_label: Boolea
             val miner = PathMiner(PathRetrievalSettings(8, 3, startLine, endLine))
             val paths = miner.retrievePaths(fileNode)
             // println("startLine ${startLine} endLine ${endLine} fileLines ${fileLines}")
-            println("\n" + paths.size.toString() + " paths between $startLine - $endLine: ")
+            // println("\n" + paths.size.toString() + " paths between $startLine - $endLine: ")
 //            paths.forEach{
 //                //println("The path is $it")
 //                printPath(it)

@@ -89,11 +89,11 @@ def context_partial_found(context_parts, word_to_count, path_to_count):
 if __name__ == '__main__':
     parser = ArgumentParser()
     parser.add_argument("-trd", "--train_data", dest="train_data_path",
-                        help="path to training data file", required=True)
+                        help="path to training data file", required=False)
     parser.add_argument("-ted", "--test_data", dest="test_data_path",
-                        help="path to test data file", required=True)
+                        help="path to test data file", required=False)
     parser.add_argument("-vd", "--val_data", dest="val_data_path",
-                        help="path to validation data file", required=True)
+                        help="path to validation data file", required=False)
     parser.add_argument("-mc", "--max_contexts", dest="max_contexts", default=200,
                         help="number of max contexts to keep", required=False)
     parser.add_argument("-wvs", "--word_vocab_size", dest="word_vocab_size", default=1301136,
@@ -131,13 +131,26 @@ if __name__ == '__main__':
                                                                        return_counts=True)
 
     num_training_examples = 0
-    for data_file_path, data_role in zip([test_data_path, val_data_path, train_data_path], ['test', 'val', 'train']):
-        num_examples = process_file(file_path=data_file_path, data_file_role=data_role, dataset_name=args.output_name,
+    # for data_file_path, data_role in zip([test_data_path, val_data_path, train_data_path], ['test', 'val', 'train']):
+    #     num_examples = process_file(file_path=data_file_path, data_file_role=data_role, dataset_name=args.output_name,
+    #                                 word_to_count=word_to_count, path_to_count=path_to_count,
+    #                                 max_contexts=int(args.max_contexts))
+    #     if data_role == 'train':
+    #         num_training_examples = num_examples
+    if test_data_path:
+        process_file(file_path=test_data_path, data_file_role='test', dataset_name=args.output_name,
                                     word_to_count=word_to_count, path_to_count=path_to_count,
                                     max_contexts=int(args.max_contexts))
-        if data_role == 'train':
-            num_training_examples = num_examples
+    if val_data_path:
+        process_file(file_path=val_data_path, data_file_role='val', dataset_name=args.output_name,
+                                    word_to_count=word_to_count, path_to_count=path_to_count,
+                                    max_contexts=int(args.max_contexts))
+    if train_data_path:
+        num_training_examples = process_file(file_path=train_data_path, data_file_role='train', dataset_name=args.output_name,
+                                    word_to_count=word_to_count, path_to_count=path_to_count,
+                                    max_contexts=int(args.max_contexts))
 
-    save_dictionaries(dataset_name=args.output_name, word_to_count=word_to_count,
-                      path_to_count=path_to_count, target_to_count=target_to_count,
-                      num_training_examples=num_training_examples)
+
+        save_dictionaries(dataset_name=args.output_name, word_to_count=word_to_count,
+                        path_to_count=path_to_count, target_to_count=target_to_count,
+                        num_training_examples=num_training_examples)
