@@ -15,8 +15,8 @@ class C2VBoost:
 
     def fit(self, data):
         # Splitting into train and validation (20%). No test.
-        # print(subprocess.run(
-        #     "python ./cpp2jsonl.py -l ../sources -m ./ClassMap/classMap.json -jl " + data + " -np -s -test 0 -af", shell=True))
+        print(subprocess.run(
+            "python ./cpp2jsonl.py -l ../sources -m ./ClassMap/classMap.json -jl " + data + " -np -s -test 0 -af", shell=True))
         print(subprocess.run("./extract_data.sh", shell=True))
         # print(subprocess.run("./code2vec/train.sh", shell=True))
 
