@@ -348,7 +348,9 @@ def split_dataset(combined_jsonl_path, train_ratio, test_ratio, use_defined_set=
             if len(lines[idx]):
                 test_f.write(lines[idx])
         print("%s %s: from %d to %d. train_end %d, val_end %d" % (curr_proj, curr_label, start, end, train_end, val_end))
-
+    if not lines:
+        print("no lines")
+        exit(0)
     for l_idx, line in enumerate(lines):
         try:
             func = json.loads(line)
@@ -452,7 +454,10 @@ def add_function_body(location, combined_jsonl_path, class_map):
 
                 if '\\' in func["file_path"] and '\\' != os.sep:
                     func["file_path"] = os.sep.join(func["file_path"].split('\\'))
+                #remove specific path
+                func["file_path"] = os.sep.join(func["file_path"].split(os.sep)[func["file_path"].split(os.sep).index('sources')+1:])
                 norm_file_path = os.path.abspath(location + os.sep + func["file_path"])
+
                 if os.path.exists(norm_file_path):
                     if DEBUG:
                         print(f'Looking for a function owning a snippet between {func["start_line"]} and {func["end_line"]} in {norm_file_path}')
@@ -505,7 +510,7 @@ if __name__ == '__main__':
     parser.add_argument("-lbl", "--label", help="Label tag, used for equal splitting", default='label')
     parser.add_argument("-af", "--add_function", help="Adds full function body. The input file must have file_path, start_line, end_line specified. The result file overwrites the original.", default='label', action='store_true')
     args = parser.parse_args()
-    print(args)
+    #print(args)
     if args.add_function:
         add_function_body(args.location, args.jsonl_location, args.class_map)
     if not args.no_parse:
