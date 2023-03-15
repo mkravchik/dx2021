@@ -32,10 +32,28 @@ else:
 
 clang.cindex.Config.set_library_file(clang_path)
 # the API is best described at https://opensource.apple.com/source/lldb/lldb-112/llvm/tools/clang/bindings/python/clang/cindex.py.auto.html
+# Parse options: (not all of them are present in the Python file)
+CXTranslationUnit_None = 0x0
+CXTranslationUnit_DetailedPreprocessingRecord = 0x01
+CXTranslationUnit_Incomplete = 0x02
+CXTranslationUnit_PrecompiledPreamble = 0x04 
+CXTranslationUnit_CacheCompletionResults = 0x08
+CXTranslationUnit_ForSerialization = 0x10
+CXTranslationUnit_CXXChainedPCH = 0x20
+CXTranslationUnit_SkipFunctionBodies = 0x40
+CXTranslationUnit_IncludeBriefCommentsInCodeCompletion = 0x80
+CXTranslationUnit_CreatePreambleOnFirstParse = 0x100
+CXTranslationUnit_KeepGoing = 0x200
+CXTranslationUnit_SingleFileParse = 0x400
+CXTranslationUnit_LimitSkipFunctionBodiesToPreamble = 0x800
+CXTranslationUnit_IncludeAttributedTypes = 0x1000
+CXTranslationUnit_VisitImplicitAttributes = 0x2000
+CXTranslationUnit_IgnoreNonErrorsFromIncludedFiles = 0x4000
+CXTranslationUnit_RetainExcludedConditionalBlocks = 0x8000
 
 def method_definitions(cursor):
     for i in cursor.walk_preorder():
-        #print(i.kind, i.extent.start.line, i.extent.end.line)
+        # print(i.kind, i.location.file.name if i.location.file else "", i.extent.start.line, i.extent.end.line)
         if i.kind != clang.cindex.CursorKind.CXX_METHOD and i.kind != clang.cindex.CursorKind.FUNCTION_DECL:
             continue
         if not i.is_definition():
@@ -111,7 +129,9 @@ def dump_functions(file_path, project, out_file_path, max_lines = max_lines, min
     index = clang.cindex.Index.create()
     try:
         tu = index.parse(file_path, args=args,
-         options=clang.cindex.TranslationUnit.PARSE_DETAILED_PROCESSING_RECORD)
+        # is this required?
+          options=clang.cindex.TranslationUnit.PARSE_DETAILED_PROCESSING_RECORD
+        )
         if DEBUG and len(tu.diagnostics):
             print(list(tu.diagnostics)) 
     except Exception as e:
@@ -365,7 +385,7 @@ def split_dataset(combined_jsonl_path, train_ratio, test_ratio, use_defined_set=
     end = l_idx
     _write_splits()
 
-def find_function(file_path, start_line, end_line, include_dirs = None, defines = []):
+def find_function(file_path, start_line, end_line, include_dirs = None, defines = [], snippet=None):
     # print("dump_functions", file_path, project)
     # necessary to deal with the symlinks
     file_path = os.path.realpath(file_path)
@@ -386,10 +406,14 @@ def find_function(file_path, start_line, end_line, include_dirs = None, defines 
 
     # print(args)
 
-    index = clang.cindex.Index.create()
     try:
-        tu = index.parse(file_path, args=args,
-         options=clang.cindex.TranslationUnit.PARSE_DETAILED_PROCESSING_RECORD)
+        index = clang.cindex.Index.create()
+        # We do not need the functions, just their limits
+        tu = index.parse(file_path, args=args, options = #CXTranslationUnit_DetailedPreprocessingRecord
+                         # no options and CXTranslationUnit_DetailedPreprocessingRecord all 40 min for 6640 recs
+                         # CXTranslationUnit_SingleFileParse, # 2m for 6640 records causes many functions not parsed correctly
+                         CXTranslationUnit_SkipFunctionBodies | CXTranslationUnit_LimitSkipFunctionBodiesToPreamble # 40 min for 6640 recs
+                                )
         if DEBUG and len(tu.diagnostics):
             print(list(tu.diagnostics)) 
     except Exception as e:
@@ -407,12 +431,19 @@ def find_function(file_path, start_line, end_line, include_dirs = None, defines 
         # print("DEF: ", function_node.location.file, function_node.displayname)
         if function_node.location.file.name != file_path:
             continue
+        # print("DEF: ", function_node.location.file, function_node.displayname, function_node.extent.start.line, function_node.extent.end.line)
         if function_node.extent.start.line <= start_line and function_node.extent.end.line>= end_line:
             if DEBUG:
                 print(f"Found: {function_node.displayname}")
             func_lines = lines[function_node.extent.start.line - 1 : function_node.extent.end.line]
             body = "".join(func_lines)
-            return body, start_line - function_node.extent.start.line + 1, end_line - function_node.extent.start.line + 1
+            # Verifying the snippet is indeed there
+            supposed_snippet = "".join("".join(func_lines[start_line - function_node.extent.start.line :
+                                                   end_line - function_node.extent.start.line + 1]).split())
+            if supposed_snippet != "".join(snippet.split()):
+                print (f"Did not find {snippet[:20]}... in {file_path} between {start_line} and {end_line}")
+                return "", 0, 0 
+            return body, start_line - function_node.extent.start.line, end_line - function_node.extent.start.line + 1
         elif (function_node.extent.start.line >= start_line and \
               function_node.extent.end.line >= end_line and\
                 function_node.extent.start.line <= end_line ) or \
@@ -422,6 +453,7 @@ def find_function(file_path, start_line, end_line, include_dirs = None, defines 
             print(f"Snippet spreads beyond a function. {start_line}, {end_line},\
                    {file_path}, {function_node.displayname}, {function_node.extent.start.line} - {function_node.extent.end.line}")
             
+    print (f"Did not find {snippet[:20]}... in {file_path} between {start_line} and {end_line}")
     return "", 0, 0
 
 """
@@ -441,13 +473,22 @@ def add_function_body(location, combined_jsonl_path, class_map):
     # Parse it
     # Find the relevant function
     # Write the updated line, from, to
+
+    lines_count = 0
     with open(combined_jsonl_path) as src:
         for line in src:
+            lines_count += 1
+    with open(combined_jsonl_path) as src:
+        for line in tqdm(src, total=lines_count):
             if len(line):
-                func = json.loads(line)
+                try:
+                    func = json.loads(line)
+                except Exception as e:
+                    print(f"Failed parsing {line}, error {e}")
+                    continue
                 if 'full_func' in func:
-                    print("The file already contains full function body, skipping")
-                    return
+                        print("The file already contains full function body, skipping")
+                        return
 
                 if '\\' in func["file_path"] and '\\' != os.sep:
                     func["file_path"] = os.sep.join(func["file_path"].split('\\'))
@@ -462,7 +503,8 @@ def add_function_body(location, combined_jsonl_path, class_map):
                     if class_mapper is not None:
                         # add only mapped files
                         label, inc_dirs, project, defines = class_mapper.getFileClass(norm_file_path)
-                        full_func, begin, end = find_function(norm_file_path, func["start_line"], func["end_line"], inc_dirs, defines)
+                        full_func, begin, end = find_function(norm_file_path, func["start_line"], func["end_line"],
+                                                               inc_dirs, defines, func["func"])
                         if len(full_func):
                             func["full_func"] = full_func
                             func["begin"] = begin
