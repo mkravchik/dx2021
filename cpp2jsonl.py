@@ -10,7 +10,7 @@ from ClassMap.classMap import mapper
 import re
 import platform
 
-DEBUG = True
+DEBUG = False
 
 combined_jsonl = "all.jsonl"
 train_jsonl = "train.jsonl"
@@ -348,9 +348,6 @@ def split_dataset(combined_jsonl_path, train_ratio, test_ratio, use_defined_set=
             if len(lines[idx]):
                 test_f.write(lines[idx])
         print("%s %s: from %d to %d. train_end %d, val_end %d" % (curr_proj, curr_label, start, end, train_end, val_end))
-    if not lines:
-        print("no lines")
-        exit(0)
     for l_idx, line in enumerate(lines):
         try:
             func = json.loads(line)
@@ -510,7 +507,7 @@ if __name__ == '__main__':
     parser.add_argument("-lbl", "--label", help="Label tag, used for equal splitting", default='label')
     parser.add_argument("-af", "--add_function", help="Adds full function body. The input file must have file_path, start_line, end_line specified. The result file overwrites the original.", action='store_true')
     args = parser.parse_args()
-    #print(args)
+    print(args)
     if args.add_function:
         add_function_body(args.location, args.jsonl_location, args.class_map)
     if not args.no_parse:
