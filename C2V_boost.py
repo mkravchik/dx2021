@@ -7,18 +7,46 @@ import json
 import pickle
 import json
 
-mapper = classMap.mapper()
-classes = mapper.getClasses()
+import sys
+#sys.path.append(os.getcwd())
+#sys.path.append(os.path.realpath(os.path.dirname(__file__)))
+# os.chdir("..")
+# cur_dir = (os.path.abspath(os.curdir))
+# os.chdir(os.path.realpath(os.path.dirname(__file__)))
+
+# mapper = classMap.mapper()
+# classes = mapper.getClasses()
 
 class C2VBoost:
     def __init__(self, confidence_margin = 0.6):
-        self.classes = classes
+        self.classes = classMap.mapper().getClasses() #classes
         self.confidence_margin = confidence_margin
+
+    def add_full_path(self, data):
+        os.chdir(os.path.realpath(os.path.dirname(__file__)))
+        with open('datat.jsonl', 'wt') as f:
+            # for item in data.items():
+            #     json.dump(item, f)
+            #     f.write('\n')
+            json.dump(data, f)
+        # Splitting into train and validation (20%). No test.
+        print(subprocess.run(
+            "python ./cpp2jsonl.py -l ../../../sources -m ./ClassMap/classMap.json -jl datat.jsonl -np -s -test 0 -af", shell=True))
+        #subprocess.Popen(r'c:\mytool\tool.exe', cwd=r'd:\test\local')
+
+        data2 = []
+        with open('datat.jsonl', 'r') as f:
+            # Iterate over the lines in the file
+            for line in f:
+                # Parse the line as JSON
+                data2.append(json.loads(line))
+        os.remove("datat.jsonl")
+        return data
 
     def fit(self, data):
         with open('data.jsonl', 'wt') as f:
             for item in data:
-                json.dump(item, f)
+                json.dump(data[item], f)
                 f.write('\n')
         # Splitting into train and validation (20%). No test.
         print(subprocess.run(
@@ -34,6 +62,7 @@ class C2VBoost:
     To confo
     """
     def predict(self, data):
+        data = self.add_full_path(data)
         labels = []
 
         # 1. Write the samples into a file
@@ -67,8 +96,8 @@ class C2VBoost:
         # 6. Compare the probability with the margin
                 if len(probs) and \
                     probs[0]['probability'] > self.confidence_margin and \
-                    probs[0]['name'][0] in classes:
-                        labels.append(classes.index(probs[0]['name'][0]))
+                    probs[0]['name'][0] in self.classes:
+                        labels.append(self.classes.index(probs[0]['name'][0]))
                 else:
                     labels.append(-1)
         os.chdir("..")
@@ -91,5 +120,5 @@ if __name__ == "__main__":
     file_to_store = open("trained_C2V.pickle", "wb")
     pickle.dump(clf, file_to_store)
 
-    labels = clf.predict(data[:10])
-    print(labels)
+    #labels = clf.predict(data[:10])
+    #print(labels)
