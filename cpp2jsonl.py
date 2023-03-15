@@ -10,7 +10,7 @@ from ClassMap.classMap import mapper
 import re
 import platform
 
-DEBUG = False
+DEBUG = True
 
 combined_jsonl = "all.jsonl"
 train_jsonl = "train.jsonl"
@@ -35,7 +35,7 @@ clang.cindex.Config.set_library_file(clang_path)
 
 def method_definitions(cursor):
     for i in cursor.walk_preorder():
-        # print(i.kind, i.extent.start.line, i.extent.end.line)
+        #print(i.kind, i.extent.start.line, i.extent.end.line)
         if i.kind != clang.cindex.CursorKind.CXX_METHOD and i.kind != clang.cindex.CursorKind.FUNCTION_DECL:
             continue
         if not i.is_definition():
@@ -503,7 +503,7 @@ if __name__ == '__main__':
     parser.add_argument("-ln", "--line_nums", help="Create files with the selected lines numbers for each set.", action='store_true')
     parser.add_argument("-da", "--dump_all", help="Dump all functions, not just the mapped ones.", action='store_true')
     parser.add_argument("-lbl", "--label", help="Label tag, used for equal splitting", default='label')
-    parser.add_argument("-af", "--add_function", help="Adds full function body. The input file must have file_path, start_line, end_line specified. The result file overwrites the original.", default='label', action='store_true')
+    parser.add_argument("-af", "--add_function", help="Adds full function body. The input file must have file_path, start_line, end_line specified. The result file overwrites the original.", action='store_true')
     args = parser.parse_args()
     print(args)
     if args.add_function:
