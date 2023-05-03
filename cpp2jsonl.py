@@ -493,8 +493,15 @@ def add_function_body(location, combined_jsonl_path, class_map):
                 if '\\' in func["file_path"] and '\\' != os.sep:
                     func["file_path"] = os.sep.join(func["file_path"].split('\\'))
                 #remove specific path
-                func["file_path"] = os.sep.join(func["file_path"].split(os.sep)[func["file_path"].split(os.sep).index('sources')+1:])
-                norm_file_path = os.path.abspath(location + os.sep + func["file_path"])
+                if os.path.exists(func["file_path"]):
+                    norm_file_path = func["file_path"]
+                else:
+                    if func["file_path"].find("sources") != -1:
+                        func["file_path"] = os.sep.join(func["file_path"].split(os.sep)[func["file_path"].split(os.sep).index('sources')+1:])
+                        norm_file_path = os.path.abspath(location + os.sep + func["file_path"])
+                    else:
+                        print("Don't know how to normalize " + func["file_path"])
+                        continue
 
                 if os.path.exists(norm_file_path):
                     if DEBUG:
@@ -503,6 +510,9 @@ def add_function_body(location, combined_jsonl_path, class_map):
                     if class_mapper is not None:
                         # add only mapped files
                         label, inc_dirs, project, defines = class_mapper.getFileClass(norm_file_path)
+                        if label.lower() == "unknown":
+                            print(f"{norm_file_path} not found in the map, skipping")
+                            continue
                         full_func, begin, end = find_function(norm_file_path, func["start_line"], func["end_line"],
                                                                inc_dirs, defines, func["func"])
                         if len(full_func):

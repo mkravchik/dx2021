@@ -46,7 +46,7 @@ class C2VBoost:
     def fit(self, data):
         with open('data.jsonl', 'wt') as f:
             for item in data:
-                json.dump(data[item], f)
+                json.dump(item, f)
                 f.write('\n')
         # Splitting into train and validation (20%). No test.
         print(subprocess.run(
