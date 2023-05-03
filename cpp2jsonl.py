@@ -9,6 +9,24 @@ from tqdm import tqdm
 from ClassMap.classMap import mapper
 import re
 import platform
+from tree_sitter import Language, Parser
+
+USE_TREE_SITTER = False
+if USE_TREE_SITTER:
+    # tree-sitter initialization
+    Language.build_library( # Store the library in the `build` directory
+        'build/my-languages.so',
+        # Include one or more languages
+        # Assumes the parsers are in the `../tree-sitter` directory
+        # Get them using `git clone https://github.com/tree-sitter/tree-sitter-XXX
+        [
+            '../tree-sitter/tree-sitter-c',
+            '../tree-sitter/tree-sitter-cpp',
+        ]
+    )
+
+C_LANGUAGE = Language('build/my-languages.so', 'c')
+CPP_LANGUAGE = Language('build/my-languages.so', 'cpp')
 
 DEBUG = False
 
@@ -385,9 +403,12 @@ def split_dataset(combined_jsonl_path, train_ratio, test_ratio, use_defined_set=
     end = l_idx
     _write_splits()
 
-def find_function(file_path, start_line, end_line, include_dirs = None, defines = [], snippet=None):
-    # print("dump_functions", file_path, project)
-    # necessary to deal with the symlinks
+
+def get_file_functions_clang(file_path, include_dirs = None, defines = [], snippet=None):
+    """
+    Returns a list of functions in the file. 
+    For each function, returns a tuple of (displayname, start_line, end_line)
+    """
     file_path = os.path.realpath(file_path)
 
     # some libraries put lots of code under if defined - include this code
@@ -409,52 +430,109 @@ def find_function(file_path, start_line, end_line, include_dirs = None, defines 
     try:
         index = clang.cindex.Index.create()
         # We do not need the functions, just their limits
-        tu = index.parse(file_path, args=args, options = #CXTranslationUnit_DetailedPreprocessingRecord
-                         # no options and CXTranslationUnit_DetailedPreprocessingRecord all 40 min for 6640 recs
-                         # CXTranslationUnit_SingleFileParse, # 2m for 6640 records causes many functions not parsed correctly
-                         CXTranslationUnit_SkipFunctionBodies | CXTranslationUnit_LimitSkipFunctionBodiesToPreamble # 40 min for 6640 recs
-                                )
-        if DEBUG and len(tu.diagnostics):
-            print(list(tu.diagnostics)) 
+        tu = index.parse(file_path, args=args, 
+                         options = CXTranslationUnit_SkipFunctionBodies | CXTranslationUnit_LimitSkipFunctionBodiesToPreamble)
+        functions = []
+        for node in tu.cursor.walk_preorder():
+            if node.location.file is not None and node.location.file.name == file_path:
+                if (node.kind == clang.cindex.CursorKind.CXX_METHOD or \
+                    node.kind == clang.cindex.CursorKind.FUNCTION_DECL) and \
+                        node.is_definition():
+                    functions.append((node.displayname, node.extent.start.line, node.extent.end.line))
+        if len(functions) == 0:
+            print("No functions in file: %s" % file_path)
+        return functions
     except Exception as e:
-        print(f"Failed parsing {file_path}, error {e}")
-        return "", 0, 0
+        print("Skipping file %s due to error %s" % (file_path, str(e)))
+        return []
 
-    defns = method_definitions(tu.cursor)
+
+
+def get_file_functions_ts(file_path, include_dirs = None, defines = [], snippet=None):
+    """
+    Returns a list of functions in the file using tree_sitter 
+    For each function, returns a tuple of (displayname, start_line, end_line)
+    """
+    file_path = os.path.realpath(file_path)
+
+    try:
+        parser = Parser()
+        if file_path.endswith('.c'):
+            parser.set_language(C_LANGUAGE)
+        elif file_path.endswith('.cpp') or file_path.endswith('.cxx') or file_path.endswith('.cc'):
+            parser.set_language(CPP_LANGUAGE)
+        else:
+            print("Unsupported file extension. Please use .c, .cpp, .cxx or .cc")
+            return  []
+
+        with open(file_path, "rb") as src:
+            tree = parser.parse(src.read())
+
+        functions = []
+        stack = [tree.root_node]
+        while stack:
+            node = stack.pop()
+            if node.type == "function_definition":
+                start_line = node.start_point[0] + 1 # they are zero-based
+                end_line = node.end_point[0] + 1 # they are zero-based
+                displayname_parts = [str(child.text, "utf-8") for child in node.children if child.type != "compound_statement"] #node.children[1].children[0].text
+                displayname = " ".join(displayname_parts)
+                functions.append((displayname, start_line, end_line))
+            stack.extend(node.children)
+
+        if len(functions) == 0:
+            print("No functions in file: %s" % file_path)
+        return functions
+    except Exception as e:
+        print("Skipping file %s due to error %s" % (file_path, str(e)))
+        return []
+
+def get_file_functions(file_path, include_dirs = None, defines = [], snippet=None):
+    if USE_TREE_SITTER:
+        return get_file_functions_ts(file_path, include_dirs, defines, snippet)
+    else:
+        return get_file_functions_clang(file_path, include_dirs, defines, snippet)
+
+
+def find_function(file_path, start_line, end_line, include_dirs = None, defines = [], snippet=None):
+    # print("dump_functions", file_path, project)
+    # necessary to deal with the symlinks
+    file_path = os.path.realpath(file_path)
+
+    # file_functions = get_file_functions(file_path, include_dirs, defines, snippet)
+    file_functions = get_file_functions_ts(file_path, include_dirs, defines, snippet)
 
     with open(file_path, encoding = "ISO-8859-1") as src:
         lines = src.readlines()
 
     file_name = file_path.split(os.sep)[-1]
 
-    for function_node in defns:
-        # print("DEF: ", function_node.location.file, function_node.displayname)
-        if function_node.location.file.name != file_path:
-            continue
-        # print("DEF: ", function_node.location.file, function_node.displayname, function_node.extent.start.line, function_node.extent.end.line)
-        if function_node.extent.start.line <= start_line and function_node.extent.end.line>= end_line:
+    for function in file_functions:
+        # print("DEF: ", function[0], function[1], function[2])
+        if function[1] <= start_line and function[2]>= end_line:
             if DEBUG:
-                print(f"Found: {function_node.displayname}")
-            func_lines = lines[function_node.extent.start.line - 1 : function_node.extent.end.line]
+                print(f"Found: {function[0]}")
+            func_lines = lines[function[1] - 1 : function[2]]
             body = "".join(func_lines)
             # Verifying the snippet is indeed there
-            supposed_snippet = "".join("".join(func_lines[start_line - function_node.extent.start.line :
-                                                   end_line - function_node.extent.start.line + 1]).split())
+            supposed_snippet = "".join("".join(func_lines[start_line - function[1] :
+                                                   end_line - function[1] + 1]).split())
             if supposed_snippet != "".join(snippet.split()):
                 print (f"Did not find {snippet[:20]}... in {file_path} between {start_line} and {end_line}")
                 return "", 0, 0 
-            return body, start_line - function_node.extent.start.line, end_line - function_node.extent.start.line + 1
-        elif (function_node.extent.start.line >= start_line and \
-              function_node.extent.end.line >= end_line and\
-                function_node.extent.start.line <= end_line ) or \
-            (function_node.extent.start.line <= start_line and \
-             function_node.extent.end.line <= end_line and \
-                function_node.extent.end.line >= start_line ):
+            return body, start_line - function[1], end_line - function[1] + 1
+        elif (function[1] >= start_line and \
+              function[2] >= end_line and\
+                function[1] <= end_line ) or \
+            (function[1] <= start_line and \
+             function[2] <= end_line and \
+                function[2] >= start_line ):
             print(f"Snippet spreads beyond a function. {start_line}, {end_line},\
-                   {file_path}, {function_node.displayname}, {function_node.extent.start.line} - {function_node.extent.end.line}")
+                   {file_path}, {function[0]}, {function[1]} - {function[2]}")
             
     print (f"Did not find {snippet[:20]}... in {file_path} between {start_line} and {end_line}")
     return "", 0, 0
+
 
 """
 Adds a full function body to each jsonl line base on the file_name, start_line, end_line. 

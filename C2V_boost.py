@@ -6,6 +6,8 @@ from typing import *
 import json
 import pickle
 import json
+from tqdm import tqdm
+from sklearn.metrics import classification_report, confusion_matrix
 
 import sys
 #sys.path.append(os.getcwd())
@@ -62,7 +64,7 @@ class C2VBoost:
     To confo
     """
     def predict(self, data):
-        data = self.add_full_path(data)
+        # data = self.add_full_path(data)
         labels = []
 
         # 1. Write the samples into a file
@@ -108,17 +110,56 @@ class C2VBoost:
 if __name__ == "__main__":
     clf = C2VBoost()
     # Open the jsonl file
-    data = []
-    with open('refined_dataset.jsonl', 'r') as f:
-        # Iterate over the lines in the file
-        for line in f:
-            # Parse the line as JSON
-            data.append(json.loads(line))
-    # Train the model
-    clf.fit(data)
-    # Store the trained model on the disk
-    file_to_store = open("trained_C2V.pickle", "wb")
-    pickle.dump(clf, file_to_store)
+    # data = []
+    # with open('refined_dataset.jsonl', 'r') as f:
+    #     # Iterate over the lines in the file
+    #     for line in f:
+    #         # Parse the line as JSON
+    #         data.append(json.loads(line))
+    # # Train the model
+    # clf.fit(data)
+    # # Store the trained model on the disk
+    # file_to_store = open("trained_C2V.pickle", "wb")
+    # pickle.dump(clf, file_to_store)
 
     #labels = clf.predict(data[:10])
     #print(labels)
+    
+    # Test the model
+    total_lines = 0
+    test_jsonl_path = "refined_test_ts.jsonl"
+    with open(test_jsonl_path) as src:
+        for line in src:
+            if not line.isspace():
+                total_lines += 1
+
+    labels = []
+    pred_labels = []
+    data = []
+    with open(test_jsonl_path, 'r') as f:
+        # Iterate over the lines in the file
+        for line in tqdm(f, total=total_lines):
+            if line.isspace():
+                continue
+            data.append(json.loads(line))
+    
+    predictions = clf.predict(data)
+    for i in range(len(predictions)):
+        if predictions[i] != -1:
+            pred_labels.append(clf.classes[predictions[i]])
+            labels.append(data[i]["label"])
+
+            # # Parse the line as JSON
+            # data = json.loads(line)
+            # # Use the model to classify the data
+            # # It should be much faster to pass all the data at once
+            # # Here's the code to pass one sample at a time
+            # prediction = clf.predict([data])
+            # # Check if the model was confident enough
+            # if prediction != -1:
+            #     pred_labels.append(clf.classes[prediction[0]])
+            #     labels.append(data["label"])
+
+    print(f"Models agreed on {len(labels)} out of {total_lines}")
+    print(confusion_matrix(labels, pred_labels ))
+    print(classification_report(labels, pred_labels, zero_division=0))
