@@ -1,5 +1,7 @@
+import argparse
 import os
 import subprocess
+import time
 import numpy as np
 from ClassMap import classMap
 from typing import *
@@ -108,52 +110,60 @@ class C2VBoost:
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-tr", "--train_jsonl", help="Train jsonl location. Defaults to %s." % 'refined_dataset.jsonl',
+                        default='refined_dataset.jsonl')
+    parser.add_argument("-ts", "--test_jsonl", help="Test jsonl location. Defaults to %s." % "refined_test.jsonl",
+                        default="refined_test.jsonl")
+    args = parser.parse_args()
+    print(args)
+
     clf = C2VBoost()
     # Open the jsonl file
-    # data = []
-    # with open('refined_dataset.jsonl', 'r') as f:
-    #     # Iterate over the lines in the file
-    #     for line in f:
-    #         # Parse the line as JSON
-    #         data.append(json.loads(line))
-    # # Train the model
-    # clf.fit(data)
-    # # Store the trained model on the disk
-    # file_to_store = open("trained_C2V.pickle", "wb")
-    # pickle.dump(clf, file_to_store)
+    data = []
+    with open(args.train_jsonl, 'r') as f:
+        # Iterate over the lines in the file
+        for line in f:
+            # Parse the line as JSON
+            data.append(json.loads(line))
 
+    start_time = time.time()
+
+    # Train the model
+    clf.fit(data)
+    # Store the trained model on the disk
+    file_to_store = open("trained_C2V.pickle", "wb")
+    pickle.dump(clf, file_to_store)
+
+    print("Training time: ", time.time() - start_time)
     #labels = clf.predict(data[:10])
     #print(labels)
     
     # Test the model
-    total_lines = 0
-    test_jsonl_path = "refined_test_ts.jsonl"
-    with open(test_jsonl_path) as src:
-        for line in src:
-            if not line.isspace():
-                total_lines += 1
-
     labels = []
     pred_labels = []
     data = []
-    with open(test_jsonl_path, 'r') as f:
+    total_lines = 0
+    with open(args.test_jsonl, 'r') as f:
         # Iterate over the lines in the file
-        for line in tqdm(f, total=total_lines):
+        for line in f:
             if line.isspace():
                 continue
+            total_lines += 1
             data.append(json.loads(line))
     
+    start_time = time.time()
     predictions = clf.predict(data)
     for i in range(len(predictions)):
         if predictions[i] != -1:
             pred_labels.append(clf.classes[predictions[i]])
             labels.append(data[i]["label"])
 
+            # # Here's the code to pass one sample at a time
             # # Parse the line as JSON
             # data = json.loads(line)
             # # Use the model to classify the data
             # # It should be much faster to pass all the data at once
-            # # Here's the code to pass one sample at a time
             # prediction = clf.predict([data])
             # # Check if the model was confident enough
             # if prediction != -1:
@@ -163,3 +173,4 @@ if __name__ == "__main__":
     print(f"Models agreed on {len(labels)} out of {total_lines}")
     print(confusion_matrix(labels, pred_labels ))
     print(classification_report(labels, pred_labels, zero_division=0))
+    print("Testing time: ", time.time() - start_time)
