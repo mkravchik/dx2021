@@ -54,7 +54,7 @@ abstract class MethodLabelExtractor(
         }
         val fileExtension = File(filePath).extension
         val methodInfos = when (fileExtension) {
-            "c", "cpp", "cc" -> {
+            "c", "cpp", "cc", "cxx" -> {
                 val methodSplitter = FuzzyMethodSplitter()
                 methodSplitter.splitIntoMethods(root as FuzzyNode)
             }
