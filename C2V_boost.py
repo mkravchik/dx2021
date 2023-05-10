@@ -26,27 +26,6 @@ class C2VBoost:
         self.classes = classMap.mapper().getClasses() #classes
         self.confidence_margin = confidence_margin
 
-    def add_full_path(self, data):
-        os.chdir(os.path.realpath(os.path.dirname(__file__)))
-        with open('datat.jsonl', 'wt') as f:
-            # for item in data.items():
-            #     json.dump(item, f)
-            #     f.write('\n')
-            json.dump(data, f)
-        # Splitting into train and validation (20%). No test.
-        print(subprocess.run(
-            "python ./cpp2jsonl.py -l ../../../sources -m ./ClassMap/classMap.json -jl datat.jsonl -np -s -test 0 -af", shell=True))
-        #subprocess.Popen(r'c:\mytool\tool.exe', cwd=r'd:\test\local')
-
-        data2 = []
-        with open('datat.jsonl', 'r') as f:
-            # Iterate over the lines in the file
-            for line in f:
-                # Parse the line as JSON
-                data2.append(json.loads(line))
-        os.remove("datat.jsonl")
-        return data
-
     def fit(self, data):
         with open('data.jsonl', 'wt') as f:
             for item in data:
@@ -66,7 +45,6 @@ class C2VBoost:
     To confo
     """
     def predict(self, data):
-        # data = self.add_full_path(data)
         labels = []
 
         # 1. Write the samples into a file

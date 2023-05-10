@@ -25,8 +25,8 @@ if USE_TREE_SITTER:
         ]
     )
 
-C_LANGUAGE = Language('build/my-languages.so', 'c')
-CPP_LANGUAGE = Language('build/my-languages.so', 'cpp')
+    C_LANGUAGE = Language('build/my-languages.so', 'c')
+    CPP_LANGUAGE = Language('build/my-languages.so', 'cpp')
 
 DEBUG = False
 
@@ -458,45 +458,45 @@ def get_file_functions_clang(file_path, include_dirs = None, defines = [], snipp
         return []
 
 
+if USE_TREE_SITTER:
+    def get_file_functions_ts(file_path, include_dirs = None, defines = [], snippet=None):
+        """
+        Returns a list of functions in the file using tree_sitter 
+        For each function, returns a tuple of (displayname, start_line, end_line)
+        """
+        file_path = os.path.realpath(file_path)
 
-def get_file_functions_ts(file_path, include_dirs = None, defines = [], snippet=None):
-    """
-    Returns a list of functions in the file using tree_sitter 
-    For each function, returns a tuple of (displayname, start_line, end_line)
-    """
-    file_path = os.path.realpath(file_path)
+        try:
+            parser = Parser()
+            if file_path.endswith('.c'):
+                parser.set_language(C_LANGUAGE)
+            elif file_path.endswith('.cpp') or file_path.endswith('.cxx') or file_path.endswith('.cc'):
+                parser.set_language(CPP_LANGUAGE)
+            else:
+                print("Unsupported file extension. Please use .c, .cpp, .cxx or .cc")
+                return  []
 
-    try:
-        parser = Parser()
-        if file_path.endswith('.c'):
-            parser.set_language(C_LANGUAGE)
-        elif file_path.endswith('.cpp') or file_path.endswith('.cxx') or file_path.endswith('.cc'):
-            parser.set_language(CPP_LANGUAGE)
-        else:
-            print("Unsupported file extension. Please use .c, .cpp, .cxx or .cc")
-            return  []
+            with open(file_path, "rb") as src:
+                tree = parser.parse(src.read())
 
-        with open(file_path, "rb") as src:
-            tree = parser.parse(src.read())
+            functions = []
+            stack = [tree.root_node]
+            while stack:
+                node = stack.pop()
+                if node.type == "function_definition":
+                    start_line = node.start_point[0] + 1 # they are zero-based
+                    end_line = node.end_point[0] + 1 # they are zero-based
+                    displayname_parts = [str(child.text, "utf-8") for child in node.children if child.type != "compound_statement"] #node.children[1].children[0].text
+                    displayname = " ".join(displayname_parts)
+                    functions.append((displayname, start_line, end_line))
+                stack.extend(node.children)
 
-        functions = []
-        stack = [tree.root_node]
-        while stack:
-            node = stack.pop()
-            if node.type == "function_definition":
-                start_line = node.start_point[0] + 1 # they are zero-based
-                end_line = node.end_point[0] + 1 # they are zero-based
-                displayname_parts = [str(child.text, "utf-8") for child in node.children if child.type != "compound_statement"] #node.children[1].children[0].text
-                displayname = " ".join(displayname_parts)
-                functions.append((displayname, start_line, end_line))
-            stack.extend(node.children)
-
-        if len(functions) == 0:
-            print("No functions in file: %s" % file_path)
-        return functions
-    except Exception as e:
-        print("Skipping file %s due to error %s" % (file_path, str(e)))
-        return []
+            if len(functions) == 0:
+                print("No functions in file: %s" % file_path)
+            return functions
+        except Exception as e:
+            print("Skipping file %s due to error %s" % (file_path, str(e)))
+            return []
 
 def get_file_functions(file_path, include_dirs = None, defines = [], snippet=None):
     if USE_TREE_SITTER:
@@ -510,8 +510,7 @@ def find_function(file_path, start_line, end_line, include_dirs = None, defines 
     # necessary to deal with the symlinks
     file_path = os.path.realpath(file_path)
 
-    # file_functions = get_file_functions(file_path, include_dirs, defines, snippet)
-    file_functions = get_file_functions_ts(file_path, include_dirs, defines, snippet)
+    file_functions = get_file_functions(file_path, include_dirs, defines, snippet)
 
     with open(file_path, encoding = "ISO-8859-1") as src:
         lines = src.readlines()
@@ -544,6 +543,22 @@ def find_function(file_path, start_line, end_line, include_dirs = None, defines 
     print (f"Did not find {snippet[:20]}... in {file_path} between {start_line} and {end_line}")
     return "", 0, 0
 
+
+"""
+Converts the file_path field of each item in the combined_json_path file to an absolute local path pointed by the location parameter.
+Converting the slashes to the local OS
+"""
+def local_path(orig_source_location, location, combined_jsonl_path):
+    tmp_name = combined_jsonl_path + ".tmp"
+    updated_jsonl = open(tmp_name, "wt")
+    with open(combined_jsonl_path) as src:
+        for line in src:
+            item = json.loads(line)
+            item["file_path"] = item["file_path"].replace(orig_source_location, location)
+            item["file_path"] = os.path.abspath(item["file_path"].replace('\\' , os.sep))
+            updated_jsonl.write(json.dumps(item) + "\n")
+    updated_jsonl.close()
+    os.rename(tmp_name, combined_jsonl_path)
 
 """
 Adds a full function body to each jsonl line base on the file_name, start_line, end_line. 
@@ -647,8 +662,15 @@ if __name__ == '__main__':
     parser.add_argument("-da", "--dump_all", help="Dump all functions, not just the mapped ones.", action='store_true')
     parser.add_argument("-lbl", "--label", help="Label tag, used for equal splitting", default='label')
     parser.add_argument("-af", "--add_function", help="Adds full function body. The input file must have file_path, start_line, end_line specified. The result file overwrites the original.", action='store_true')
+    parser.add_argument("-cfp", "--convert_file_path", help="Converts the file_path to the local file path. The input file must have file_path which has 'sources' as a root of all projects. The result file overwrites the original.", action='store_true')
+    parser.add_argument("-osl", "--orig_source_location", help="The C/C++ sources location at the origin. Used for converting file path.")
     args = parser.parse_args()
     print(args)
+    if args.convert_file_path:
+        if args.orig_source_location is None:
+            print("Please specify the original source location, like -osl C:\\Users\\Or\\Desktop\\Fatal-Library\\sources")
+            exit(1)
+        local_path(args.orig_source_location, args.location, args.jsonl_location)
     if args.add_function:
         add_function_body(args.location, args.jsonl_location, args.class_map)
     if not args.no_parse:
