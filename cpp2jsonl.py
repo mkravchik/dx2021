@@ -3,13 +3,32 @@ import clang
 import clang.cindex
 import json
 import os
+import shutil
 import argparse
 from tqdm import tqdm
 from ClassMap.classMap import mapper
 import re
 import platform
+from tree_sitter import Language, Parser
 
-DEBUG = True
+USE_TREE_SITTER = False
+if USE_TREE_SITTER:
+    # tree-sitter initialization
+    Language.build_library( # Store the library in the `build` directory
+        'build/my-languages.so',
+        # Include one or more languages
+        # Assumes the parsers are in the `../tree-sitter` directory
+        # Get them using `git clone https://github.com/tree-sitter/tree-sitter-XXX
+        [
+            '../tree-sitter/tree-sitter-c',
+            '../tree-sitter/tree-sitter-cpp',
+        ]
+    )
+
+C_LANGUAGE = Language('build/my-languages.so', 'c')
+CPP_LANGUAGE = Language('build/my-languages.so', 'cpp')
+
+DEBUG = False
 
 combined_jsonl = "all.jsonl"
 train_jsonl = "train.jsonl"
@@ -31,10 +50,28 @@ else:
 
 clang.cindex.Config.set_library_file(clang_path)
 # the API is best described at https://opensource.apple.com/source/lldb/lldb-112/llvm/tools/clang/bindings/python/clang/cindex.py.auto.html
+# Parse options: (not all of them are present in the Python file)
+CXTranslationUnit_None = 0x0
+CXTranslationUnit_DetailedPreprocessingRecord = 0x01
+CXTranslationUnit_Incomplete = 0x02
+CXTranslationUnit_PrecompiledPreamble = 0x04 
+CXTranslationUnit_CacheCompletionResults = 0x08
+CXTranslationUnit_ForSerialization = 0x10
+CXTranslationUnit_CXXChainedPCH = 0x20
+CXTranslationUnit_SkipFunctionBodies = 0x40
+CXTranslationUnit_IncludeBriefCommentsInCodeCompletion = 0x80
+CXTranslationUnit_CreatePreambleOnFirstParse = 0x100
+CXTranslationUnit_KeepGoing = 0x200
+CXTranslationUnit_SingleFileParse = 0x400
+CXTranslationUnit_LimitSkipFunctionBodiesToPreamble = 0x800
+CXTranslationUnit_IncludeAttributedTypes = 0x1000
+CXTranslationUnit_VisitImplicitAttributes = 0x2000
+CXTranslationUnit_IgnoreNonErrorsFromIncludedFiles = 0x4000
+CXTranslationUnit_RetainExcludedConditionalBlocks = 0x8000
 
 def method_definitions(cursor):
     for i in cursor.walk_preorder():
-        # print(i.kind, i.extent.start.line, i.extent.end.line)
+        # print(i.kind, i.location.file.name if i.location.file else "", i.extent.start.line, i.extent.end.line)
         if i.kind != clang.cindex.CursorKind.CXX_METHOD and i.kind != clang.cindex.CursorKind.FUNCTION_DECL:
             continue
         if not i.is_definition():
@@ -110,7 +147,9 @@ def dump_functions(file_path, project, out_file_path, max_lines = max_lines, min
     index = clang.cindex.Index.create()
     try:
         tu = index.parse(file_path, args=args,
-         options=clang.cindex.TranslationUnit.PARSE_DETAILED_PROCESSING_RECORD)
+        # is this required?
+          options=clang.cindex.TranslationUnit.PARSE_DETAILED_PROCESSING_RECORD
+        )
         if DEBUG and len(tu.diagnostics):
             print(list(tu.diagnostics)) 
     except Exception as e:
@@ -358,7 +397,6 @@ def split_dataset(combined_jsonl_path, train_ratio, test_ratio, use_defined_set=
             if len(lines[idx]):
                 test_f.write(lines[idx])
         print("%s %s: from %d to %d. train_end %d, val_end %d" % (curr_proj, curr_label, start, end, train_end, val_end))
-
     for l_idx, line in enumerate(lines):
         try:
             func = json.loads(line)
@@ -375,6 +413,212 @@ def split_dataset(combined_jsonl_path, train_ratio, test_ratio, use_defined_set=
             lines[l_idx] = "" # This will mark it as invalid
     end = l_idx
     _write_splits()
+
+
+def get_file_functions_clang(file_path, include_dirs = None, defines = [], snippet=None):
+    """
+    Returns a list of functions in the file. 
+    For each function, returns a tuple of (displayname, start_line, end_line)
+    """
+    file_path = os.path.realpath(file_path)
+
+    # some libraries put lots of code under if defined - include this code
+    args = []
+    for define in defines:
+        args.extend(["-D", define])
+    expected_defines = set(get_ifdefs(file_path))
+    for define in expected_defines:
+        args.extend(["-D", define])
+
+    # print(args)
+
+    if include_dirs is not None:
+        for inc in include_dirs:
+            args.extend(["-I", inc])
+
+    # print(args)
+
+    try:
+        index = clang.cindex.Index.create()
+        # We do not need the functions, just their limits
+        tu = index.parse(file_path, args=args, 
+                         options = CXTranslationUnit_SkipFunctionBodies | CXTranslationUnit_LimitSkipFunctionBodiesToPreamble)
+        functions = []
+        for node in tu.cursor.walk_preorder():
+            if node.location.file is not None and node.location.file.name == file_path:
+                if (node.kind == clang.cindex.CursorKind.CXX_METHOD or \
+                    node.kind == clang.cindex.CursorKind.FUNCTION_DECL) and \
+                        node.is_definition():
+                    functions.append((node.displayname, node.extent.start.line, node.extent.end.line))
+        if len(functions) == 0:
+            print("No functions in file: %s" % file_path)
+        return functions
+    except Exception as e:
+        print("Skipping file %s due to error %s" % (file_path, str(e)))
+        return []
+
+
+
+def get_file_functions_ts(file_path, include_dirs = None, defines = [], snippet=None):
+    """
+    Returns a list of functions in the file using tree_sitter 
+    For each function, returns a tuple of (displayname, start_line, end_line)
+    """
+    file_path = os.path.realpath(file_path)
+
+    try:
+        parser = Parser()
+        if file_path.endswith('.c'):
+            parser.set_language(C_LANGUAGE)
+        elif file_path.endswith('.cpp') or file_path.endswith('.cxx') or file_path.endswith('.cc'):
+            parser.set_language(CPP_LANGUAGE)
+        else:
+            print("Unsupported file extension. Please use .c, .cpp, .cxx or .cc")
+            return  []
+
+        with open(file_path, "rb") as src:
+            tree = parser.parse(src.read())
+
+        functions = []
+        stack = [tree.root_node]
+        while stack:
+            node = stack.pop()
+            if node.type == "function_definition":
+                start_line = node.start_point[0] + 1 # they are zero-based
+                end_line = node.end_point[0] + 1 # they are zero-based
+                displayname_parts = [str(child.text, "utf-8") for child in node.children if child.type != "compound_statement"] #node.children[1].children[0].text
+                displayname = " ".join(displayname_parts)
+                functions.append((displayname, start_line, end_line))
+            stack.extend(node.children)
+
+        if len(functions) == 0:
+            print("No functions in file: %s" % file_path)
+        return functions
+    except Exception as e:
+        print("Skipping file %s due to error %s" % (file_path, str(e)))
+        return []
+
+def get_file_functions(file_path, include_dirs = None, defines = [], snippet=None):
+    if USE_TREE_SITTER:
+        return get_file_functions_ts(file_path, include_dirs, defines, snippet)
+    else:
+        return get_file_functions_clang(file_path, include_dirs, defines, snippet)
+
+
+def find_function(file_path, start_line, end_line, include_dirs = None, defines = [], snippet=None):
+    # print("dump_functions", file_path, project)
+    # necessary to deal with the symlinks
+    file_path = os.path.realpath(file_path)
+
+    # file_functions = get_file_functions(file_path, include_dirs, defines, snippet)
+    file_functions = get_file_functions_ts(file_path, include_dirs, defines, snippet)
+
+    with open(file_path, encoding = "ISO-8859-1") as src:
+        lines = src.readlines()
+
+    file_name = file_path.split(os.sep)[-1]
+
+    for function in file_functions:
+        # print("DEF: ", function[0], function[1], function[2])
+        if function[1] <= start_line and function[2]>= end_line:
+            if DEBUG:
+                print(f"Found: {function[0]}")
+            func_lines = lines[function[1] - 1 : function[2]]
+            body = "".join(func_lines)
+            # Verifying the snippet is indeed there
+            supposed_snippet = "".join("".join(func_lines[start_line - function[1] :
+                                                   end_line - function[1] + 1]).split())
+            if supposed_snippet != "".join(snippet.split()):
+                print (f"Did not find {snippet[:20]}... in {file_path} between {start_line} and {end_line}")
+                return "", 0, 0 
+            return body, start_line - function[1], end_line - function[1] + 1
+        elif (function[1] >= start_line and \
+              function[2] >= end_line and\
+                function[1] <= end_line ) or \
+            (function[1] <= start_line and \
+             function[2] <= end_line and \
+                function[2] >= start_line ):
+            print(f"Snippet spreads beyond a function. {start_line}, {end_line},\
+                   {file_path}, {function[0]}, {function[1]} - {function[2]}")
+            
+    print (f"Did not find {snippet[:20]}... in {file_path} between {start_line} and {end_line}")
+    return "", 0, 0
+
+
+"""
+Adds a full function body to each jsonl line base on the file_name, start_line, end_line. 
+The file name should be relative to the *location* argument
+You can use something like sed 's/C:\\\\Users\\\\Or\\\\Desktop\\\\Fatal-Library\\\\sources\\\\//g' -i <JSONL_PATH> to get the path right
+"""
+def add_function_body(location, combined_jsonl_path, class_map):
+    class_mapper = mapper(class_map, location)
+
+    # Open the input jsonl
+    # Open a tmp output (?)
+    tmp_name = combined_jsonl_path + ".tmp"
+    updated_jsonl = open(tmp_name, "wt")
+    # For each line
+    # Find the source file
+    # Parse it
+    # Find the relevant function
+    # Write the updated line, from, to
+
+    lines_count = 0
+    with open(combined_jsonl_path) as src:
+        for line in src:
+            lines_count += 1
+    with open(combined_jsonl_path) as src:
+        for line in tqdm(src, total=lines_count):
+            if len(line):
+                try:
+                    func = json.loads(line)
+                except Exception as e:
+                    print(f"Failed parsing {line}, error {e}")
+                    continue
+                if 'full_func' in func:
+                        print("The file already contains full function body, skipping")
+                        return
+
+                if '\\' in func["file_path"] and '\\' != os.sep:
+                    func["file_path"] = os.sep.join(func["file_path"].split('\\'))
+                #remove specific path
+                if os.path.exists(func["file_path"]):
+                    norm_file_path = func["file_path"]
+                else:
+                    if func["file_path"].find("sources") != -1:
+                        func["file_path"] = os.sep.join(func["file_path"].split(os.sep)[func["file_path"].split(os.sep).index('sources')+1:])
+                        norm_file_path = os.path.abspath(location + os.sep + func["file_path"])
+                    else:
+                        print("Don't know how to normalize " + func["file_path"])
+                        continue
+
+                if os.path.exists(norm_file_path):
+                    if DEBUG:
+                        print(f'Looking for a function owning a snippet between {func["start_line"]} and {func["end_line"]} in {norm_file_path}')
+
+                    if class_mapper is not None:
+                        # add only mapped files
+                        label, inc_dirs, project, defines = class_mapper.getFileClass(norm_file_path)
+                        if label.lower() == "unknown":
+                            print(f"{norm_file_path} not found in the map, skipping")
+                            continue
+                        full_func, begin, end = find_function(norm_file_path, func["start_line"], func["end_line"],
+                                                               inc_dirs, defines, func["func"])
+                        if len(full_func):
+                            func["full_func"] = full_func
+                            func["begin"] = begin
+                            func["end"] = end
+
+                            json_s = json.dumps(func)
+
+                            updated_jsonl.write(json_s)
+                            updated_jsonl.write("\n")
+                else:
+                    print(f"{norm_file_path} not found")
+
+    updated_jsonl.close()
+    shutil.move(tmp_name, combined_jsonl_path)
+    pass
 
 # dump_functions(
 #     #"/mnt/d/GitHub_Clones/scripts/C_Dataset/test/check_datasets/UI/7zip/GUI/BenchmarkDialog.cpp",
@@ -402,8 +646,11 @@ if __name__ == '__main__':
     parser.add_argument("-ln", "--line_nums", help="Create files with the selected lines numbers for each set.", action='store_true')
     parser.add_argument("-da", "--dump_all", help="Dump all functions, not just the mapped ones.", action='store_true')
     parser.add_argument("-lbl", "--label", help="Label tag, used for equal splitting", default='label')
+    parser.add_argument("-af", "--add_function", help="Adds full function body. The input file must have file_path, start_line, end_line specified. The result file overwrites the original.", action='store_true')
     args = parser.parse_args()
     print(args)
+    if args.add_function:
+        add_function_body(args.location, args.jsonl_location, args.class_map)
     if not args.no_parse:
         parse_sources(args.location, args.jsonl_location, args.max_lines, args.class_map, args.set_map, args.dump_all)
     if args.split:
