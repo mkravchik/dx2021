@@ -22,21 +22,31 @@ import sys
 # classes = mapper.getClasses()
 
 class C2VBoost:
-    def __init__(self, confidence_margin = 0.6):
-        self.classes = classMap.mapper().getClasses() #classes
+    def __init__(self, confidence_margin = 0.6, sources_dir = "../sources", classMap_path = "./ClassMap/classMap.json"):
+        self.sources = os.path.abspath(sources_dir)
+        self.classMap_path = os.path.abspath(classMap_path)
+        self.classes = classMap.mapper(classMap_path).getClasses() #classes
         self.confidence_margin = confidence_margin
 
     def fit(self, data):
+        # As we are running scripts from the code2vec directory, we need to change the directory
+        # Save the current directory first
+        cur_dir = (os.path.abspath(os.curdir))
+        os.chdir(os.path.realpath(os.path.dirname(__file__)))
+        print("Running from ", os.getcwd())
         with open('data.jsonl', 'wt') as f:
             for item in data:
                 json.dump(item, f)
                 f.write('\n')
         # Splitting into train and validation (20%). No test.
         print(subprocess.run(
-            "python ./cpp2jsonl.py -l ../sources -m ./ClassMap/classMap.json -jl data.jsonl -np -s -test 0 -af", shell=True))
+            f"python ./cpp2jsonl.py -l {self.sources} -m {self.classMap_path} -jl data.jsonl -np -s -test 0", shell=True))
         print(subprocess.run("./extract_asts.sh train", shell=True))
         print(subprocess.run("./extract_asts.sh valid", shell=True))
         print(subprocess.run("./train_code2vec.sh", shell=True))
+
+        #restore the directory
+        os.chdir(cur_dir)
 
 
     """
@@ -45,15 +55,20 @@ class C2VBoost:
     To confo
     """
     def predict(self, data):
+        # As we are running scripts from the code2vec directory, we need to change the directory
+        # Save the current directory first
+        cur_dir = (os.path.abspath(os.curdir))
+        os.chdir(os.path.realpath(os.path.dirname(__file__)))
+
         labels = []
 
         # 1. Write the samples into a file
         test_input_file = 'test.jsonl'
         with open(test_input_file, 'wt') as f:
             for item in data:
-                if not 'full_func' in item:
-                    print("The file does not contain full function body, run cpp2jsonl -af first")
-                    return -1
+                # if not 'full_func' in item:
+                #     print("The file does not contain full function body, run cpp2jsonl -af first")
+                #     return -1
                 json.dump(item, f)
                 f.write('\n')
 
@@ -83,6 +98,10 @@ class C2VBoost:
                 else:
                     labels.append(-1)
         os.chdir("..")
+
+        #restore the directory
+        os.chdir(cur_dir)
+
         # 7. Return the result mapped to the index        
         return labels
 
