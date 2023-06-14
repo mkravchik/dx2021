@@ -21,6 +21,40 @@ import sys
 # mapper = classMap.mapper()
 # classes = mapper.getClasses()
 
+"""
+Compare two files and return True if they are the same, False otherwise
+"""
+def compare_files(file1, file2):
+    # first check if the files have the same size
+    if os.path.getsize(file1) != os.path.getsize(file2):
+        print(f"The files have different sizes {file1} {os.path.getsize(file1)} {file2} {os.path.getsize(file2)}")
+        return False
+    line_cnt = 0
+    with open(file1, 'r') as f1:
+        with open(file2, 'r') as f2:
+            for line1 in f1:
+                line_cnt += 1
+                for line2 in f2:
+                    if line1 != line2:
+                        print(f"The files have different lines {line_cnt} {line1} {line2}")
+                        return False
+                    break # break from the inner loop, read next line from both files
+    return True
+
+
+"""
+If the test_input_file and org_input_file are different, then we need to overwrite the org_input_file with test_input_file
+Returns True if the files are different and the org_input_file was overwritten, False otherwise
+"""
+def overwrite_if_needed(test_input_file, org_input_file):
+    if not compare_files(test_input_file, org_input_file):
+        print(subprocess.run("mv " + test_input_file + " " + org_input_file, shell=True))
+        return True
+    else:
+        # remove the test_input_file
+        print(subprocess.run("rm " + test_input_file, shell=True))
+    return False
+
 class C2VBoost:
     def __init__(self, confidence_margin = 0.6, sources_dir = "../sources", classMap_path = "./ClassMap/classMap.json"):
         self.sources = os.path.abspath(sources_dir)
@@ -40,9 +74,19 @@ class C2VBoost:
                 f.write('\n')
         # Splitting into train and validation (20%). No test.
         print(subprocess.run(
-            f"python ./cpp2jsonl.py -l {self.sources} -m {self.classMap_path} -jl data.jsonl -np -s -test 0", shell=True))
-        print(subprocess.run("./extract_asts.sh train", shell=True))
-        print(subprocess.run("./extract_asts.sh valid", shell=True))
+            f"python ./cpp2jsonl.py -l {self.sources} -m {self.classMap_path} -jl data.jsonl -np -s -test 0 -trl train_tmp.jsonl -vl valid_tmp.jsonl", shell=True))
+
+        # # 2. Extract the ast contexts
+        if overwrite_if_needed("train_tmp.jsonl", 'train.jsonl'):
+            print(subprocess.run("./extract_asts.sh train", shell=True))
+        else:
+            print("Using the existing train.jsonl and its ASTs")
+
+        if overwrite_if_needed("valid_tmp.jsonl", 'valid.jsonl'):
+            print(subprocess.run("./extract_asts.sh valid", shell=True))
+        else:
+            print("Using the existing valid.jsonl and its ASTs")
+        
         print(subprocess.run("./train_code2vec.sh", shell=True))
 
         #restore the directory
@@ -63,7 +107,7 @@ class C2VBoost:
         labels = []
 
         # 1. Write the samples into a file
-        test_input_file = 'test.jsonl'
+        test_input_file = 'test_tmp.jsonl'
         with open(test_input_file, 'wt') as f:
             for item in data:
                 # if not 'full_func' in item:
@@ -72,8 +116,16 @@ class C2VBoost:
                 json.dump(item, f)
                 f.write('\n')
 
+        
         # 2. Extract the ast contexts
-        print(subprocess.run("./extract_asts.sh test", shell=True))
+        if overwrite_if_needed(test_input_file, 'test.jsonl'):
+            print(subprocess.run("./extract_asts.sh test", shell=True))
+            # warn if there is a different number of lines in test.jsonl and astminer/dataset/test_with_asts.jsonl
+            if not compare_files("test.jsonl", "astminer/dataset/test_with_asts.jsonl"):
+                print("The number of lines in test.jsonl and astminer/dataset/test_with_asts.jsonl is different!\
+                       For compatibility with other models, the test.jsonl should be overwritten with the test_with_asts.jsonl")
+        else:
+            print("Using the existing test.jsonl and its ASTs")
 
         # 3. Preprocess for code2vec
         os.chdir("code2vec")
@@ -155,17 +207,6 @@ if __name__ == "__main__":
         if predictions[i] != -1:
             pred_labels.append(clf.classes[predictions[i]])
             labels.append(data[i]["label"])
-
-            # # Here's the code to pass one sample at a time
-            # # Parse the line as JSON
-            # data = json.loads(line)
-            # # Use the model to classify the data
-            # # It should be much faster to pass all the data at once
-            # prediction = clf.predict([data])
-            # # Check if the model was confident enough
-            # if prediction != -1:
-            #     pred_labels.append(clf.classes[prediction[0]])
-            #     labels.append(data["label"])
 
     print(f"Models agreed on {len(labels)} out of {total_lines}")
     print(confusion_matrix(labels, pred_labels ))

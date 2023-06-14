@@ -232,6 +232,9 @@ def parse_sources(location, out_file_path=combined_jsonl, max_lines=max_lines, c
         if filename.endswith(".cpp") or filename.endswith(".c"):
             dump = True
             project = root[len(location) + len(os.sep):].split(os.sep)[0]
+            dest_set = None
+            defines = []
+            inc_dirs = []
             if class_mapper is not None:
                 # add only mapped files
                 label, inc_dirs, project, defines = class_mapper.getFileClass(os.path.sep.join([root, filename]))
@@ -239,8 +242,6 @@ def parse_sources(location, out_file_path=combined_jsonl, max_lines=max_lines, c
                     dump = False
                 if set_map:
                     dest_set = class_mapper.getProjectSet(project)
-                else:
-                    dest_set = None
             if dump:
                 dump_functions(os.path.join(root, filename), project, out_file_path,
                  max_lines, label=label, include_dirs=inc_dirs, dest_set=dest_set, defines=defines)
@@ -651,6 +652,9 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("-l", "--location", help="C/C++ files location. Defaults to %s." % folder_path, default=folder_path)
     parser.add_argument("-jl", "--jsonl_location", help="The combined JSONL file location. Defaults to %s." % combined_jsonl, default=combined_jsonl)
+    parser.add_argument("-trl", "--train_location", help="The train JSONL file location. Defaults to %s." % "train.jsonl", default=train_jsonl)
+    parser.add_argument("-tsl", "--test_location", help="The test JSONL file location. Defaults to %s." % "test.jsonl", default=test_jsonl)
+    parser.add_argument("-vl", "--valid_location", help="The validation JSONL file location. Defaults to %s." % "test.jsonl", default=valid_jsonl)
     parser.add_argument("-s", "--split", help="Perform splitting to train/validation/test. Defaults to false.", action='store_true')
     parser.add_argument("-np", "--no_parse", help="Do not parse the sources. Defaults to false.", action='store_true')
     parser.add_argument("-train", "--train_ratio", type=float, help="The ratio of the data to out into train.jsonl. Defaults to %.1f." % train_ratio, default=train_ratio)
@@ -666,6 +670,11 @@ if __name__ == '__main__':
     parser.add_argument("-osl", "--orig_source_location", help="The C/C++ sources location at the origin. Used for converting file path.")
     args = parser.parse_args()
     print(args)
+
+    train_jsonl = args.train_location
+    test_jsonl = args.test_location
+    valid_jsonl = args.valid_location
+
     if args.convert_file_path:
         if args.orig_source_location is None:
             print("Please specify the original source location, like -osl C:\\Users\\Or\\Desktop\\Fatal-Library\\sources")

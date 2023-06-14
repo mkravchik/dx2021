@@ -1,6 +1,6 @@
 #!/bin/bash
 
-DATASET=../src/ #../sources
+DATASET=~/sources_train/ #../sources
 DATASET2=..src/ #../sources
 SNIPPET_SIZE=10
 
@@ -21,7 +21,12 @@ done
 # # If you don't want to re-parse the sourses add -np
 # python ./cpp2jsonl.py -l $DATASET -m ./ClassMap/classMap.json -jl all_benchmark_full.jsonl -s -sm -np
 # python ./cpp2jsonl.py -l $DATASET -m ./ClassMap/classMap.json -s  
+python ./cpp2jsonl.py -l $DATASET -m ./ClassMap/classMap.json -s -sm -jl data.jsonl
 
+#split 80-20
+python ./cpp2jsonl.py -l $DATASET -m "/home/moshe/Fatal-Library/ClassMap/classMap.json" -jl data.jsonl -np -s -test 0
+
+cp ~/Fatal-Library/Boosting/test.jsonl .
 
 # # # NO SPLIT FOR THE TEST
 # # python ./cpp2jsonl.py -l $DATASET2 -m ./ClassMap/classMap.json -jl test.jsonl -sm -np
@@ -36,15 +41,15 @@ STEP_SIZE=5
 for SNIPPET_SIZE in 10 
 do  
     echo Running on code snippets of $SNIPPET_SIZE lines
-    # cd astminer
-    # for split in train valid test
-    # do
-    #     ./cli.sh ${split} $SNIPPET_SIZE $STEP_SIZE ${NAMES}
-    #     cp ../code2vec/devign.${split}.raw.txt ../code2vec/devign.${split}.raw_backup.txt
-    #     cp dataset/${split}.jsonl dataset/${split}_backup.jsonl
-    #     cp dataset/${split}_lines.jsonl dataset/${split}_lines_backup.jsonl
-    # done
-    # cd ..
+    cd astminer
+    for split in train valid test
+    do
+        ./cli.sh ${split} $SNIPPET_SIZE $STEP_SIZE ${NAMES}
+        cp ../code2vec/devign.${split}.raw.txt ../code2vec/devign.${split}.raw_backup.txt
+        cp dataset/${split}.jsonl dataset/${split}_backup.jsonl
+        cp dataset/${split}_lines.jsonl dataset/${split}_lines_backup.jsonl
+    done
+    cd ..
 #    ./run_cross.sh "$@"
 done
 

@@ -31,40 +31,45 @@ def process_file(file_path, data_file_role, dataset_name, word_to_count, path_to
     with open(output_path, 'w') as outfile:
         with open(file_path, 'r') as file:
             for line in file:
-                parts = line.rstrip('\n').split(' ')
-                target_name = parts[0]
-                contexts = parts[1:]
+                try:
+                    parts = line.rstrip('\n').split(' ')
+                    target_name = parts[0]
+                    contexts = parts[1:]
 
-                if len(contexts) > max_unfiltered:
-                    max_unfiltered = len(contexts)
-                sum_total += len(contexts)
+                    if len(contexts) > max_unfiltered:
+                        max_unfiltered = len(contexts)
+                    sum_total += len(contexts)
 
-                if len(contexts) > max_contexts:
-                    context_parts = [c.split(',') for c in contexts]
-                    full_found_contexts = [c for i, c in enumerate(contexts)
-                                           if context_full_found(context_parts[i], word_to_count, path_to_count)]
-                    partial_found_contexts = [c for i, c in enumerate(contexts)
-                                              if context_partial_found(context_parts[i], word_to_count, path_to_count)
-                                              and not context_full_found(context_parts[i], word_to_count,
-                                                                         path_to_count)]
-                    if len(full_found_contexts) > max_contexts:
-                        contexts = random.sample(full_found_contexts, max_contexts)
-                    elif len(full_found_contexts) <= max_contexts \
-                            and len(full_found_contexts) + len(partial_found_contexts) > max_contexts:
-                        contexts = full_found_contexts + \
-                                   random.sample(partial_found_contexts, max_contexts - len(full_found_contexts))
-                    else:
-                        contexts = full_found_contexts + partial_found_contexts
+                    if len(contexts) > max_contexts:
+                        context_parts = [c.split(',') for c in contexts]
+                        full_found_contexts = [c for i, c in enumerate(contexts)
+                                            if context_full_found(context_parts[i], word_to_count, path_to_count)]
+                        partial_found_contexts = [c for i, c in enumerate(contexts)
+                                                if context_partial_found(context_parts[i], word_to_count, path_to_count)
+                                                and not context_full_found(context_parts[i], word_to_count,
+                                                                            path_to_count)]
+                        if len(full_found_contexts) > max_contexts:
+                            contexts = random.sample(full_found_contexts, max_contexts)
+                        elif len(full_found_contexts) <= max_contexts \
+                                and len(full_found_contexts) + len(partial_found_contexts) > max_contexts:
+                            contexts = full_found_contexts + \
+                                    random.sample(partial_found_contexts, max_contexts - len(full_found_contexts))
+                        else:
+                            contexts = full_found_contexts + partial_found_contexts
 
-                if len(contexts) == 0:
-                    empty += 1
+                    if len(contexts) == 0:
+                        empty += 1
+                        continue
+
+                    sum_sampled += len(contexts)
+
+                    csv_padding = " " * (max_contexts - len(contexts))
+                    outfile.write(target_name + ' ' + " ".join(contexts) + csv_padding + '\n')
+                    total += 1
+                except Exception as e:
+                    print(e)
+                    print('Failed line: ' + line)
                     continue
-
-                sum_sampled += len(contexts)
-
-                csv_padding = " " * (max_contexts - len(contexts))
-                outfile.write(target_name + ' ' + " ".join(contexts) + csv_padding + '\n')
-                total += 1
 
     print('File: ' + file_path)
     if total:
