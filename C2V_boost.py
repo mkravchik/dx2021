@@ -25,6 +25,9 @@ import sys
 Compare two files and return True if they are the same, False otherwise
 """
 def compare_files(file1, file2):
+    # first check that both files exist
+    if not os.path.exists(file1) or not os.path.exists(file2):
+        return False 
     # first check if the files have the same size
     if os.path.getsize(file1) != os.path.getsize(file2):
         print(f"The files have different sizes {file1} {os.path.getsize(file1)} {file2} {os.path.getsize(file2)}")
@@ -123,7 +126,7 @@ class C2VBoost:
             # warn if there is a different number of lines in test.jsonl and astminer/dataset/test_with_asts.jsonl
             if not compare_files("test.jsonl", "astminer/dataset/test_with_asts.jsonl"):
                 print("The number of lines in test.jsonl and astminer/dataset/test_with_asts.jsonl is different!\
-                       For compatibility with other models, the test.jsonl should be overwritten with the test_with_asts.jsonl")
+                       For compatibility with other models, test them over astminer/dataset/test_with_asts.jsonl.")
         else:
             print("Using the existing test.jsonl and its ASTs")
 
